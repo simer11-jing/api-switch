@@ -1,0 +1,1191 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Switch</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --bg: #f8fafc;
+            --card: #ffffff;
+            --border: #e2e8f0;
+            --text: #1e293b;
+            --text-dim: #64748b;
+            --accent: #3b82f6;
+            --accent-hover: #2563eb;
+            --success: #22c55e;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --accent-light: rgba(59, 130, 246, 0.1);
+        }
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg: #0f172a;
+                --card: #1e293b;
+                --border: #334155;
+                --text: #f1f5f9;
+                --text-dim: #94a3b8;
+                --accent-light: rgba(59, 130, 246, 0.15);
+            }
+        }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+        .login-container { min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+        .login-box { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 40px; width: 360px; }
+        .login-box h1 { font-size: 28px; font-weight: 700; margin-bottom: 8px; text-align: center; color: var(--accent); }
+        .login-box p { color: var(--text-dim); text-align: center; margin-bottom: 24px; font-size: 14px; }
+        .form-group { margin-bottom: 16px; }
+        .form-group label { display: block; margin-bottom: 6px; font-size: 14px; color: var(--text-dim); }
+        .form-group input, .form-group select { width: 100%; padding: 10px 12px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 14px; }
+        .form-group input:focus, .form-group select:focus { outline: none; border-color: var(--accent); }
+        .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 10px 16px; border-radius: 6px; font-size: 14px; font-weight: 500; cursor: pointer; border: none; transition: all 0.2s; }
+        .btn-primary { background: var(--accent); color: white; }
+        .btn-primary:hover { background: var(--accent-hover); }
+        .btn-block { width: 100%; }
+        .btn-danger { background: var(--danger); color: white; }
+        .btn-success { background: var(--success); color: white; }
+        .btn-warning { background: var(--warning); color: white; }
+        .btn-ghost { background: transparent; color: var(--text-dim); border: 1px solid var(--border); }
+        .btn-ghost:hover { background: var(--bg); color: var(--text); }
+        .btn-sm { padding: 6px 10px; font-size: 12px; }
+        .error-msg { color: var(--danger); font-size: 13px; margin-top: 8px; text-align: center; display: none; }
+
+        .layout { display: none; min-height: 100vh; }
+        .layout.active { display: flex; }
+
+        .sidebar { width: 220px; background: var(--card); border-right: 1px solid var(--border); padding: 20px 0; display: flex; flex-direction: column; }
+        .sidebar-logo { padding: 0 20px 20px; border-bottom: 1px solid var(--border); margin-bottom: 16px; }
+        .sidebar-logo h1 { font-size: 20px; font-weight: 700; color: var(--accent); }
+        .sidebar-nav { flex: 1; }
+        .nav-item { display: flex; align-items: center; gap: 10px; padding: 12px 20px; color: var(--text-dim); cursor: pointer; transition: all 0.2s; font-size: 14px; }
+        .nav-item:hover { background: var(--accent-light); color: var(--accent); }
+        .nav-item.active { background: var(--accent-light); color: var(--accent); font-weight: 500; }
+        .sidebar-footer { padding: 16px 20px; border-top: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+        .user-info { font-size: 14px; }
+        .logout-btn { background: none; border: none; color: var(--text-dim); cursor: pointer; padding: 4px; }
+        .logout-btn:hover { color: var(--danger); }
+
+        .main { flex: 1; padding: 24px; overflow-y: auto; }
+        .page { display: none; }
+        .page.active { display: block; }
+        .page-header { margin-bottom: 24px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+        .page-title { font-size: 24px; font-weight: 600; }
+
+        .card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 20px; margin-bottom: 16px; }
+        .card-title { font-size: 16px; font-weight: 600; margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; }
+
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 24px; }
+        .stat-card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
+        .stat-label { font-size: 12px; color: var(--text-dim); margin-bottom: 4px; }
+        .stat-value { font-size: 24px; font-weight: 700; }
+
+        .table { width: 100%; border-collapse: collapse; }
+        .table th, .table td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); font-size: 13px; }
+        .table th { color: var(--text-dim); font-weight: 500; font-size: 11px; text-transform: uppercase; background: var(--bg); }
+        .table tr:hover { background: var(--accent-light); }
+        .status-badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 10px; font-size: 11px; font-weight: 500; }
+        .status-badge.enabled { background: rgba(34, 197, 94, 0.15); color: var(--success); }
+        .status-badge.disabled { background: rgba(239, 68, 68, 0.15); color: var(--danger); }
+        .status-badge.cooling { background: rgba(245, 158, 11, 0.15); color: var(--warning); }
+        .status-badge.testing { background: rgba(59, 130, 246, 0.15); color: var(--accent); }
+        .actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+
+        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; z-index: 100; }
+        .modal-overlay.active { display: flex; }
+        .modal { background: var(--card); border: 1px solid var(--border); border-radius: 12px; width: 700px; max-height: 90vh; overflow-y: auto; }
+        .modal-header { padding: 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+        .modal-title { font-size: 18px; font-weight: 600; }
+        .modal-close { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 20px; }
+        .modal-body { padding: 20px; }
+        .modal-footer { padding: 16px 20px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 12px; }
+
+        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .form-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+        .form-select { width: 100%; padding: 10px 12px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 14px; }
+
+        .model-tag { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; background: var(--bg); border: 1px solid var(--border); border-radius: 20px; font-size: 12px; margin: 2px; cursor: pointer; }
+        .model-tag:hover { border-color: var(--accent); }
+        .model-tag.selected { background: var(--accent-light); border-color: var(--accent); color: var(--accent); }
+        .model-tag button { background: none; border: none; color: var(--text-dim); cursor: pointer; padding: 0; margin-left: 4px; font-size: 14px; }
+        .model-tag button:hover { color: var(--danger); }
+
+        .test-result { padding: 8px 12px; border-radius: 6px; font-size: 12px; margin-top: 8px; }
+        .test-result.success { background: rgba(34, 197, 94, 0.1); color: var(--success); }
+        .test-result.error { background: rgba(239, 68, 68, 0.1); color: var(--danger); }
+
+        .log-item { padding: 10px 12px; border-bottom: 1px solid var(--border); font-size: 12px; display: flex; gap: 12px; align-items: center; }
+        .log-item:last-child { border-bottom: none; }
+        .log-time { color: var(--text-dim); min-width: 140px; font-size: 11px; }
+        .log-model { min-width: 100px; font-weight: 500; }
+        .log-status { min-width: 50px; }
+        .log-status.success { color: var(--success); }
+        .log-status.error { color: var(--danger); }
+        .log-latency { color: var(--text-dim); min-width: 60px; }
+        .log-tokens { color: var(--text-dim); font-size: 11px; }
+
+        .toast { position: fixed; bottom: 24px; right: 24px; background: var(--card); border: 1px solid var(--border); padding: 12px 20px; border-radius: 8px; display: none; animation: slideIn 0.3s; z-index: 200; }
+        .toast.show { display: block; }
+        .toast.success { border-color: var(--success); }
+        .toast.error { border-color: var(--danger); }
+
+        .empty-state { text-align: center; padding: 40px; color: var(--text-dim); }
+        .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; margin-right: 6px; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .tab-bar { display: flex; gap: 4px; margin-bottom: 16px; border-bottom: 1px solid var(--border); }
+        .tab { padding: 8px 16px; color: var(--text-dim); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; font-size: 13px; }
+        .tab:hover { color: var(--text); }
+        .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+        .model-list { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; max-height: 200px; overflow-y: auto; }
+        .model-item { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; font-size: 12px; }
+        .model-item input[type="checkbox"] { width: auto; }
+        .model-item .test-status { margin-left: auto; font-size: 11px; }
+
+        .batch-test-bar { display: flex; align-items: center; gap: 12px; padding: 12px; background: var(--bg); border-radius: 8px; margin-bottom: 16px; }
+        .batch-test-bar label { font-size: 13px; color: var(--text-dim); }
+
+        .test-modal .model-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px; max-height: 400px; overflow-y: auto; }
+        .test-modal .model-card { padding: 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); }
+        .test-modal .model-card.testing { border-color: var(--accent); }
+        .test-modal .model-card.success { border-color: var(--success); background: rgba(34,197,94,0.05); }
+        .test-modal .model-card.error { border-color: var(--danger); background: rgba(239,68,68,0.05); }
+        .test-modal .model-card .name { font-weight: 500; margin-bottom: 4px; }
+        .test-modal .model-card .result { font-size: 11px; color: var(--text-dim); }
+        .test-modal .model-card .result.success { color: var(--success); }
+        .test-modal .model-card .result.error { color: var(--danger); }
+    </style>
+</head>
+<body>
+    <div id="loginPage" class="login-container">
+        <div class="login-box">
+            <h1>API Switch</h1>
+            <p>API 代理管理面板</p>
+            <div class="form-group">
+                <label>用户名</label>
+                <input type="text" id="loginUsername" placeholder="请输入用户名" value="admin">
+            </div>
+            <div class="form-group">
+                <label>密码</label>
+                <input type="password" id="loginPassword" placeholder="请输入密码" value="admin">
+            </div>
+            <button class="btn btn-primary btn-block" onclick="login()">登录</button>
+            <div id="loginError" class="error-msg"></div>
+        </div>
+    </div>
+
+    <div id="mainLayout" class="layout">
+        <div class="sidebar">
+            <div class="sidebar-logo">
+                <h1>API Switch</h1>
+            </div>
+            <nav class="sidebar-nav">
+                <div class="nav-item active" data-page="dashboard" onclick="showPage('dashboard')">仪表盘</div>
+                <div class="nav-item" data-page="channels" onclick="showPage('channels')">渠道管理</div>
+                <div class="nav-item" data-page="entries" onclick="showPage('entries')">模型路由</div>
+                <div class="nav-item" data-page="keys" onclick="showPage('keys')">API Keys</div>
+                <div class="nav-item" data-page="logs" onclick="showPage('logs')">请求日志</div>
+                <div class="nav-item" data-page="settings" onclick="showPage('settings')">设置</div>
+            </nav>
+            <div class="sidebar-footer">
+                <span class="user-info" id="userName">Admin</span>
+                <button class="logout-btn" onclick="logout()" title="退出">登出</button>
+            </div>
+        </div>
+
+        <main class="main">
+            <!-- Dashboard -->
+            <div id="dashboardPage" class="page active">
+                <div class="page-header">
+                    <h2 class="page-title">仪表盘</h2>
+                    <button class="btn btn-ghost btn-sm" onclick="loadDashboard()">刷新</button>
+                </div>
+                <div class="stats-grid">
+                    <div class="stat-card"><div class="stat-label">总请求</div><div class="stat-value" id="statTotal">-</div></div>
+                    <div class="stat-card"><div class="stat-label">今日请求</div><div class="stat-value" id="statToday">-</div></div>
+                    <div class="stat-card"><div class="stat-label">Token 输入</div><div class="stat-value" id="statPrompt">-</div></div>
+                    <div class="stat-card"><div class="stat-label">Token 输出</div><div class="stat-value" id="statCompletion">-</div></div>
+                    <div class="stat-card"><div class="stat-label">渠道数</div><div class="stat-value" id="statChannels">-</div></div>
+                    <div class="stat-card"><div class="stat-label">API Keys</div><div class="stat-value" id="statKeys">-</div></div>
+                </div>
+                <div class="card">
+                    <div class="card-title">最近请求</div>
+                    <div id="recentLogs"></div>
+                </div>
+            </div>
+
+            <!-- Channels -->
+            <div id="channelsPage" class="page">
+                <div class="page-header">
+                    <h2 class="page-title">渠道管理</h2>
+                    <button class="btn btn-primary" onclick="openChannelModal()">+ 添加渠道</button>
+                </div>
+                <div class="batch-test-bar" id="batchTestBar" style="display:none;">
+                    <label>批量测试:</label>
+                    <button class="btn btn-primary btn-sm" onclick="batchTestChannels()">测试所有渠道</button>
+                    <button class="btn btn-warning btn-sm" onclick="batchTestSelected()">测试选中渠道</button>
+                    <span id="batchTestStatus" style="margin-left:auto;color:var(--text-dim);font-size:12px;"></span>
+                </div>
+                <div class="card">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th width="40"><input type="checkbox" id="selectAllChannels" onchange="toggleSelectAllChannels()"></th>
+                                <th>名称</th>
+                                <th>类型</th>
+                                <th>权重</th>
+                                <th>状态</th>
+                                <th>模型数</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="channelsTable"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Entries -->
+            <div id="entriesPage" class="page">
+                <div class="page-header">
+                    <h2 class="page-title">模型路由</h2>
+                    <div style="display:flex;gap:12px;">
+                        <button class="btn btn-ghost btn-sm" onclick="openBatchTestModelsModal()">批量测试模型</button>
+                        <button class="btn btn-primary" onclick="openEntryModal()">+ 添加路由</button>
+                    </div>
+                </div>
+                <div class="card">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>模型</th>
+                                <th>映射名称</th>
+                                <th>渠道</th>
+                                <th>权重</th>
+                                <th>优先级</th>
+                                <th>熔断</th>
+                                <th>状态</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="entriesTable"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Keys -->
+            <div id="keysPage" class="page">
+                <div class="page-header">
+                    <h2 class="page-title">API Keys</h2>
+                    <button class="btn btn-primary" onclick="openKeyModal()">+ 创建 Key</button>
+                </div>
+                <div class="card">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>名称</th>
+                                <th>Key</th>
+                                <th>使用次数</th>
+                                <th>状态</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="keysTable"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Logs -->
+            <div id="logsPage" class="page">
+                <div class="page-header">
+                    <h2 class="page-title">请求日志</h2>
+                    <button class="btn btn-danger btn-sm" onclick="clearLogs()">清空</button>
+                </div>
+                <div class="card">
+                    <div id="logsContainer"></div>
+                </div>
+            </div>
+
+            <!-- Settings -->
+            <div id="settingsPage" class="page">
+                <div class="page-header">
+                    <h2 class="page-title">设置</h2>
+                </div>
+                <div class="card">
+                    <div class="card-title">代理设置</div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>超时时间 (ms)</label>
+                            <input type="number" id="settingTimeout" value="60000">
+                        </div>
+                        <div class="form-group">
+                            <label>重试次数</label>
+                            <input type="number" id="settingRetry" value="3">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>熔断阈值</label>
+                            <input type="number" id="settingThreshold" value="5">
+                        </div>
+                        <div class="form-group">
+                            <label>熔断恢复时间 (秒)</label>
+                            <input type="number" id="settingResetTime" value="300">
+                        </div>
+                    </div>
+                    <button class="btn btn-primary" onclick="saveSettings()">保存设置</button>
+                </div>
+                <div class="card">
+                    <div class="card-title">修改密码</div>
+                    <div class="form-group">
+                        <label>当前密码</label>
+                        <input type="password" id="oldPassword">
+                    </div>
+                    <div class="form-group">
+                        <label>新密码</label>
+                        <input type="password" id="newPassword">
+                    </div>
+                    <button class="btn btn-primary" onclick="changePassword()">修改密码</button>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Channel Modal -->
+    <div id="channelModal" class="modal-overlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 class="modal-title" id="channelModalTitle">添加渠道</h3>
+                <button class="modal-close" onclick="closeModal('channelModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="channelId">
+                <div class="form-group">
+                    <label>渠道名称 *</label>
+                    <input type="text" id="channelName" placeholder="例如: OpenAI">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>API 类型</label>
+                        <select id="channelType" class="form-select">
+                            <option value="openai">OpenAI</option>
+                            <option value="claude">Anthropic Claude</option>
+                            <option value="gemini">Google Gemini</option>
+                            <option value="azure">Azure OpenAI</option>
+                            <option value="embedding">Embedding/向量</option>
+                            <option value="tts">TTS/语音</option>
+                            <option value="custom">Custom</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>权重 (越高越优先)</label>
+                        <input type="number" id="channelWeight" value="1" min="1" max="100">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Base URL *</label>
+                    <input type="text" id="channelBaseUrl" placeholder="https://api.openai.com/v1">
+                </div>
+                <div class="form-group">
+                    <label>API Key *</label>
+                    <input type="password" id="channelApiKey" placeholder="sk-...">
+                </div>
+                <div class="form-group">
+                    <label>可用模型</label>
+                    <div id="channelModelsTags"></div>
+                    <div style="margin-top:8px;display:flex;gap:8px;align-items:center;">
+                        <button class="btn btn-ghost btn-sm" onclick="discoverModelsInModal()">发现模型</button>
+                        <button class="btn btn-ghost btn-sm" onclick="testChannelFromModal()">测试渠道</button>
+                        <span id="discoverStatus" style="margin-left:10px;color:var(--text-dim);font-size:12px;"></span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-ghost" onclick="closeModal('channelModal')">取消</button>
+                <button class="btn btn-primary" onclick="saveChannel()">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Entry Modal -->
+    <div id="entryModal" class="modal-overlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 class="modal-title" id="entryModalTitle">添加路由</h3>
+                <button class="modal-close" onclick="closeModal('entryModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>渠道 *</label>
+                    <select id="entryChannelId" class="form-select" onchange="onEntryChannelChange()"></select>
+                </div>
+                <div class="form-group" id="entryModelsGroup" style="display:none;">
+                    <label>选择模型 (从渠道模型中选择)</label>
+                    <div id="entryChannelModels" class="model-list"></div>
+                    <div style="margin-top:8px;">
+                        <button class="btn btn-ghost btn-sm" onclick="addAllModelsAsRoutes()">+ 添加所有模型为路由</button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>模型名称 * (手动输入或从上方选择)</label>
+                    <input type="text" id="entryModel" placeholder="例如: gpt-4 或从上方选择">
+                </div>
+                <div class="form-group">
+                    <label>映射名称 (显示别名，可选)</label>
+                    <input type="text" id="entryDisplayName" placeholder="例如: GPT-4 智障版">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>权重</label>
+                        <input type="number" id="entryWeight" value="1" min="1" max="100">
+                    </div>
+                    <div class="form-group">
+                        <label>优先级 (越大越优先)</label>
+                        <input type="number" id="entryPriority" value="0" min="0" max="100">
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-ghost" onclick="closeModal('entryModal')">取消</button>
+                <button class="btn btn-primary" onclick="saveEntry()">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Batch Test Models Modal -->
+    <div id="batchTestModelsModal" class="modal-overlay test-modal">
+        <div class="modal" style="width:800px;">
+            <div class="modal-header">
+                <h3 class="modal-title">批量测试模型</h3>
+                <button class="modal-close" onclick="closeModal('batchTestModelsModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>选择渠道 *</label>
+                    <select id="batchTestChannelId" class="form-select" onchange="loadChannelModelsForTest()">
+                        <option value="">-- 选择渠道 --</option>
+                    </select>
+                </div>
+                <div id="batchTestModelsContainer"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-ghost" onclick="closeModal('batchTestModelsModal')">关闭</button>
+                <button class="btn btn-primary" onclick="runBatchModelTest()">开始测试</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Key Modal -->
+    <div id="keyModal" class="modal-overlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 class="modal-title">创建 API Key</h3>
+                <button class="modal-close" onclick="closeModal('keyModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Key 名称</label>
+                    <input type="text" id="keyName" placeholder="例如: 我的应用">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-ghost" onclick="closeModal('keyModal')">取消</button>
+                <button class="btn btn-primary" onclick="saveKey()">创建</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast" class="toast"></div>
+
+    <script>
+        let token = localStorage.getItem('api_switch_token');
+        let username = localStorage.getItem('api_switch_username');
+        let channels = [];
+        let allModels = [];
+        let selectedChannelModels = [];
+        let selectedChannels = new Set();
+
+        const API_BASE = '';
+
+        document.addEventListener('DOMContentLoaded', () => {
+            if (token) { showMainLayout(); showPage('dashboard'); }
+            document.getElementById('loginPassword').addEventListener('keypress', e => e.key === 'Enter' && login());
+        });
+
+        async function login() {
+            const user = document.getElementById('loginUsername').value;
+            const pass = document.getElementById('loginPassword').value;
+            try {
+                const res = await fetch(API_BASE + '/api/login', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: user, password: pass })
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    token = data.token; username = data.username;
+                    localStorage.setItem('api_switch_token', token);
+                    localStorage.setItem('api_switch_username', username);
+                    showMainLayout(); showPage('dashboard');
+                } else { showError(data.error || '登录失败'); }
+            } catch (e) { showError('网络错误'); }
+        }
+
+        async function logout() {
+            try { await fetch(API_BASE + '/api/logout', { method: 'POST', headers: authHeaders() }); } catch {}
+            localStorage.removeItem('api_switch_token'); localStorage.removeItem('api_switch_username');
+            location.reload();
+        }
+
+        function authHeaders() { return { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }; }
+
+        function showError(msg) {
+            const el = document.getElementById('loginError'); el.textContent = msg; el.style.display = 'block';
+        }
+
+        function showMainLayout() {
+            document.getElementById('loginPage').style.display = 'none';
+            document.getElementById('mainLayout').classList.add('active');
+            document.getElementById('userName').textContent = username || 'User';
+        }
+
+        function showPage(page) {
+            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+            document.getElementById(page + 'Page').classList.add('active');
+            document.querySelector(`.nav-item[data-page="${page}"]`).classList.add('active');
+            if (page === 'dashboard') loadDashboard();
+            else if (page === 'channels') { loadChannels(); document.getElementById('batchTestBar').style.display = 'flex'; }
+            else if (page === 'entries') loadEntries();
+            else if (page === 'keys') loadKeys();
+            else if (page === 'logs') loadLogs();
+            else if (page === 'settings') loadSettings();
+        }
+
+        async function loadDashboard() {
+            try {
+                const [stats, logsData, chs, kys] = await Promise.all([
+                    fetch(API_BASE + '/api/dashboard/stats', { headers: authHeaders() }).then(r => r.json()),
+                    fetch(API_BASE + '/api/logs?limit=20', { headers: authHeaders() }).then(r => r.json()),
+                    fetch(API_BASE + '/api/channels', { headers: authHeaders() }).then(r => r.json()),
+                    fetch(API_BASE + '/api/keys', { headers: authHeaders() }).then(r => r.json())
+                ]);
+                document.getElementById('statTotal').textContent = stats.total_requests ?? 0;
+                document.getElementById('statToday').textContent = stats.today_requests ?? 0;
+                document.getElementById('statPrompt').textContent = (stats.total_prompt_tokens ?? 0).toLocaleString();
+                document.getElementById('statCompletion').textContent = (stats.total_completion_tokens ?? 0).toLocaleString();
+                document.getElementById('statChannels').textContent = chs ? chs.length : 0;
+                document.getElementById('statKeys').textContent = kys ? kys.length : 0;
+                const logs = logsData.logs || [];
+                document.getElementById('recentLogs').innerHTML = logs.length ? logs.map(log => `
+                    <div class="log-item">
+                        <span class="log-time">${new Date(log.created_at).toLocaleString()}</span>
+                        <span class="log-model">${log.model || '-'}</span>
+                        <span class="log-status ${log.status_code === 200 ? 'success' : 'error'}">${log.status_code || 'err'}</span>
+                        <span class="log-latency">${log.latency_ms}ms</span>
+                        <span class="log-tokens">${log.prompt_tokens || 0} → ${log.completion_tokens || 0}</span>
+                    </div>`).join('') : '<div class="empty-state"><p>暂无日志</p></div>';
+            } catch (e) { console.error(e); }
+        }
+
+        async function loadChannels() {
+            try {
+                channels = await fetch(API_BASE + '/api/channels', { headers: authHeaders() }).then(r => r.json());
+                selectedChannels.clear();
+                document.getElementById('selectAllChannels').checked = false;
+                document.getElementById('channelsTable').innerHTML = channels.length ? channels.map(ch => {
+                    const models = parseModels(ch.models);
+                    return `<tr>
+                        <td><input type="checkbox" value="${ch.id}" onchange="toggleChannelSelect('${ch.id}')"></td>
+                        <td><strong>${ch.name}</strong></td>
+                        <td>${ch.api_type || 'custom'}</td>
+                        <td>${ch.weight || 1}</td>
+                        <td><span class="status-badge ${ch.enabled ? 'enabled' : 'disabled'}">${ch.enabled ? '启用' : '禁用'}</span></td>
+                        <td>${models.length}</td>
+                        <td class="actions">
+                            <button class="btn btn-ghost btn-sm" onclick="editChannel('${ch.id}')">编辑</button>
+                            <button class="btn btn-ghost btn-sm" onclick="testChannel('${ch.id}')">测试</button>
+                            <button class="btn btn-ghost btn-sm" onclick="discoverModels('${ch.id}')">发现</button>
+                            <button class="btn btn-ghost btn-sm" onclick="testChannelModels('${ch.id}')">测模型</button>
+                            <button class="btn btn-ghost btn-sm" onclick="toggleChannel('${ch.id}', ${!ch.enabled})">${ch.enabled ? '禁用' : '启用'}</button>
+                            <button class="btn btn-danger btn-sm" onclick="deleteChannel('${ch.id}')">删除</button>
+                        </td>
+                    </tr>`;
+                }).join('') : '<tr><td colspan="7" style="text-align:center;padding:40px;">暂无渠道</td></tr>';
+            } catch (e) { console.error(e); }
+        }
+
+        function toggleChannelSelect(id) {
+            if (selectedChannels.has(id)) selectedChannels.delete(id);
+            else selectedChannels.add(id);
+            updateBatchTestStatus();
+        }
+
+        function toggleSelectAllChannels() {
+            const checked = document.getElementById('selectAllChannels').checked;
+            if (checked) {
+                channels.forEach(ch => selectedChannels.add(ch.id));
+            } else {
+                selectedChannels.clear();
+            }
+            document.querySelectorAll('#channelsTable input[type="checkbox"]').forEach(cb => cb.checked = checked);
+            updateBatchTestStatus();
+        }
+
+        function updateBatchTestStatus() {
+            document.getElementById('batchTestStatus').textContent = `已选择 ${selectedChannels.size} 个渠道`;
+        }
+
+        async function batchTestChannels() {
+            if (channels.length === 0) { showToast('没有可测试的渠道', true); return; }
+            showToast('开始批量测试渠道...');
+            let success = 0, fail = 0;
+            for (const ch of channels) {
+                try {
+                    const res = await fetch(API_BASE + `/api/channels/${ch.id}/test`, { method: 'POST', headers: authHeaders() });
+                    const data = await res.json();
+                    if (data.success) success++;
+                    else fail++;
+                } catch { fail++; }
+            }
+            showToast(`测试完成: ${success} 成功, ${fail} 失败`);
+        }
+
+        async function batchTestSelected() {
+            if (selectedChannels.size === 0) { showToast('请先选择渠道', true); return; }
+            showToast('开始测试...');
+            let success = 0, fail = 0;
+            for (const id of selectedChannels) {
+                try {
+                    const res = await fetch(API_BASE + `/api/channels/${id}/test`, { method: 'POST', headers: authHeaders() });
+                    const data = await res.json();
+                    if (data.success) success++;
+                    else fail++;
+                } catch { fail++; }
+            }
+            showToast(`测试完成: ${success} 成功, ${fail} 失败`);
+        }
+
+        function parseModels(modelsStr) {
+            if (!modelsStr) return [];
+            try { return JSON.parse(modelsStr); } catch { return []; }
+        }
+
+        function openChannelModal(channel = null) {
+            allModels = [];
+            document.getElementById('channelId').value = channel?.id || '';
+            document.getElementById('channelModalTitle').textContent = channel ? '编辑渠道' : '添加渠道';
+            document.getElementById('channelName').value = channel?.name || '';
+            document.getElementById('channelType').value = channel?.api_type || 'openai';
+            document.getElementById('channelWeight').value = channel?.weight || 1;
+            document.getElementById('channelBaseUrl').value = channel?.base_url || 'https://api.openai.com/v1';
+            document.getElementById('channelApiKey').value = channel?.api_key || '';
+            document.getElementById('discoverStatus').textContent = '';
+            if (channel?.models) {
+                allModels = parseModels(channel.models);
+                renderModelTags();
+            } else {
+                document.getElementById('channelModelsTags').innerHTML = '<span style="color:var(--text-dim);font-size:12px;">点击"发现模型"获取模型列表</span>';
+            }
+            document.getElementById('channelModal').classList.add('active');
+        }
+
+        function editChannel(id) {
+            const ch = channels.find(c => c.id === id);
+            if (ch) openChannelModal(ch);
+        }
+
+        function renderModelTags() {
+            document.getElementById('channelModelsTags').innerHTML = allModels.length ?
+                allModels.map(m => `<span class="model-tag">${m}<button onclick="removeModel('${m}')">&times;</button></span>`).join('') :
+                '<span style="color:var(--text-dim);font-size:12px;">无模型</span>';
+        }
+
+        function removeModel(model) {
+            allModels = allModels.filter(m => m !== model);
+            renderModelTags();
+        }
+
+        async function discoverModelsInModal() {
+            const baseUrl = document.getElementById('channelBaseUrl').value;
+            const apiKey = document.getElementById('channelApiKey').value;
+            if (!baseUrl || !apiKey) { showToast('请先填写 Base URL 和 API Key', true); return; }
+            document.getElementById('discoverStatus').innerHTML = '<span class="spinner"></span>发现中...';
+            try {
+                // 先保存渠道以获取ID
+                let channelId = document.getElementById('channelId').value;
+                if (!channelId) {
+                    const createRes = await fetch(API_BASE + '/api/channels', {
+                        method: 'POST', headers: authHeaders(),
+                        body: JSON.stringify({
+                            name: document.getElementById('channelName').value || 'temp',
+                            api_type: document.getElementById('channelType').value,
+                            base_url: baseUrl,
+                            api_key: apiKey,
+                            weight: parseInt(document.getElementById('channelWeight').value)
+                        })
+                    });
+                    if (createRes.ok) {
+                        const ch = await createRes.json();
+                        channelId = ch.id;
+                        document.getElementById('channelId').value = channelId;
+                    } else {
+                        document.getElementById('discoverStatus').textContent = '保存渠道失败';
+                        return;
+                    }
+                }
+                const discoverRes = await fetch(API_BASE + `/api/channels/${channelId}/discover`, {
+                    method: 'POST', headers: authHeaders()
+                });
+                const data = await discoverRes.json();
+                allModels = data.models || [];
+                renderModelTags();
+                document.getElementById('discoverStatus').textContent = `发现 ${allModels.length} 个模型`;
+                if (allModels.length) showToast(`发现 ${allModels.length} 个模型`);
+            } catch (e) {
+                document.getElementById('discoverStatus').textContent = '发现失败';
+                showToast('发现模型失败', true);
+            }
+        }
+
+        async function testChannelFromModal() {
+            const channelId = document.getElementById('channelId').value;
+            if (!channelId) {
+                // 先保存
+                await saveChannelTmp();
+            }
+            const id = document.getElementById('channelId').value;
+            if (!id) { showToast('请先保存渠道', true); return; }
+            document.getElementById('discoverStatus').innerHTML = '<span class="spinner"></span>测试中...';
+            try {
+                const res = await fetch(API_BASE + `/api/channels/${id}/test`, { method: 'POST', headers: authHeaders() });
+                const data = await res.json();
+                document.getElementById('discoverStatus').textContent = data.success ? `成功 (${data.latency_ms}ms)` : `失败: ${data.error}`;
+            } catch (e) {
+                document.getElementById('discoverStatus').textContent = '测试失败';
+            }
+        }
+
+        async function saveChannelTmp() {
+            const baseUrl = document.getElementById('channelBaseUrl').value;
+            const apiKey = document.getElementById('channelApiKey').value;
+            if (!baseUrl || !apiKey) return;
+            const createRes = await fetch(API_BASE + '/api/channels', {
+                method: 'POST', headers: authHeaders(),
+                body: JSON.stringify({
+                    name: document.getElementById('channelName').value || 'temp',
+                    api_type: document.getElementById('channelType').value,
+                    base_url: baseUrl,
+                    api_key: apiKey,
+                    weight: parseInt(document.getElementById('channelWeight').value)
+                })
+            });
+            if (createRes.ok) {
+                const ch = await createRes.json();
+                document.getElementById('channelId').value = ch.id;
+            }
+        }
+
+        async function saveChannel() {
+            const id = document.getElementById('channelId').value;
+            const data = {
+                name: document.getElementById('channelName').value,
+                api_type: document.getElementById('channelType').value,
+                base_url: document.getElementById('channelBaseUrl').value,
+                api_key: document.getElementById('channelApiKey').value,
+                weight: parseInt(document.getElementById('channelWeight').value) || 1,
+                models: JSON.stringify(allModels)
+            };
+            try {
+                let res;
+                if (id) {
+                    res = await fetch(API_BASE + `/api/channels/${id}`, {
+                        method: 'PUT', headers: authHeaders(), body: JSON.stringify(data)
+                    });
+                } else {
+                    res = await fetch(API_BASE + '/api/channels', {
+                        method: 'POST', headers: authHeaders(), body: JSON.stringify(data)
+                    });
+                }
+                if (res.ok) {
+                    closeModal('channelModal');
+                    loadChannels();
+                    showToast(id ? '渠道已更新' : '渠道已添加');
+                } else {
+                    const err = await res.json();
+                    showToast(err.error || '保存失败', true);
+                }
+            } catch (e) { showToast('网络错误', true); }
+        }
+
+        async function testChannel(id) {
+            try {
+                const res = await fetch(API_BASE + `/api/channels/${id}/test`, { method: 'POST', headers: authHeaders() });
+                const data = await res.json();
+                showToast(data.success ? `成功 (${data.latency_ms}ms)` : `失败: ${data.error || data.response}`, !data.success);
+            } catch (e) { showToast('测试失败', true); }
+        }
+
+        async function discoverModels(id) {
+            try {
+                showToast('正在发现模型...');
+                const res = await fetch(API_BASE + `/api/channels/${id}/discover`, { method: 'POST', headers: authHeaders() });
+                const data = await res.json();
+                showToast(`发现 ${data.count || 0} 个模型`);
+                loadChannels();
+            } catch (e) { showToast('发现失败', true); }
+        }
+
+        async function testChannelModels(channelId) {
+            const ch = channels.find(c => c.id === channelId);
+            if (!ch) return;
+            const models = parseModels(ch.models);
+            if (models.length === 0) {
+                showToast('该渠道没有发现模型，请先点击"发现"', true);
+                return;
+            }
+            // 打开批量测试弹窗并预选该渠道
+            document.getElementById('batchTestChannelId').value = channelId;
+            loadChannelModelsForTest();
+            document.getElementById('batchTestModelsModal').classList.add('active');
+        }
+
+        async function toggleChannel(id, enabled) {
+            await fetch(API_BASE + `/api/channels/${id}/toggle`, {
+                method: 'POST', headers: authHeaders(), body: JSON.stringify({ enabled })
+            });
+            loadChannels();
+        }
+
+        async function deleteChannel(id) {
+            if (!confirm('确定删除此渠道？')) return;
+            await fetch(API_BASE + `/api/channels/${id}`, { method: 'DELETE', headers: authHeaders() });
+            loadChannels();
+        }
+
+        async function loadEntries() {
+            try {
+                const [entries, chs] = await Promise.all([
+                    fetch(API_BASE + '/api/entries', { headers: authHeaders() }).then(r => r.json()),
+                    fetch(API_BASE + '/api/channels', { headers: authHeaders() }).then(r => r.json())
+                ]);
+                channels = chs;
+                const chMap = {}; channels.forEach(c => chMap[c.id] = c.name);
+                document.getElementById('entriesTable').innerHTML = entries.length ? entries.map(e => {
+                    const cooling = e.cooldown_until && e.cooldown_until > Date.now() / 1000;
+                    return `<tr>
+                        <td><strong>${e.model}</strong></td>
+                        <td><em>${e.display_name || '-'}</em></td>
+                        <td>${chMap[e.channel_id] || '-'}</td>
+                        <td>${e.weight || 1}</td>
+                        <td>${e.priority || 0}</td>
+                        <td><span class="status-badge ${cooling ? 'cooling' : ''}">${cooling ? '冷却中' : '正常'}</span></td>
+                        <td><span class="status-badge ${e.enabled ? 'enabled' : 'disabled'}">${e.enabled ? '启用' : '禁用'}</span></td>
+                        <td class="actions">
+                            <button class="btn btn-ghost btn-sm" onclick="testSingleModel('${e.channel_id}', '${e.model}')">测试</button>
+                            <button class="btn btn-ghost btn-sm" onclick="openEntryModal(${JSON.stringify(e).replace(/'/g, "\\'")})">编辑</button>
+                            <button class="btn btn-ghost btn-sm" onclick="toggleEntry('${e.id}', ${!e.enabled})">${e.enabled ? '禁用' : '启用'}</button>
+                            <button class="btn btn-danger btn-sm" onclick="deleteEntry('${e.id}')">删除</button>
+                        </td>
+                    </tr>`;
+                }).join('') : '<tr><td colspan="8" style="text-align:center;padding:40px;">暂无路由</td></tr>';
+            } catch (e) { console.error(e); }
+        }
+
+        async function testSingleModel(channelId, model) {
+            const ch = channels.find(c => c.id === channelId);
+            if (!ch) { showToast('未找到渠道', true); return; }
+            showToast(`测试 ${model}...`);
+            try {
+                const res = await fetch(API_BASE + `/api/channels/${channelId}/test-model`, {
+                    method: 'POST', headers: authHeaders(),
+                    body: JSON.stringify({ model })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(`${model}: 成功 (${data.latency_ms}ms)`);
+                } else {
+                    showToast(`${model}: 失败 - ${data.error || data.response}`, true);
+                }
+            } catch (e) {
+                showToast(`测试失败`, true);
+            }
+        }
+
+        async function openBatchTestModelsModal() {
+            // 加载所有渠道到选择框
+            const select = document.getElementById('batchTestChannelId');
+            select.innerHTML = '<option value="">-- 选择渠道 --</option>' +
+                channels.map(c => `<option value="${c.id}">${c.name} (${parseModels(c.models).length} 模型)</option>`).join('');
+            document.getElementById('batchTestModelsContainer').innerHTML = '<div style="color:var(--text-dim);text-align:center;padding:20px;">请先选择渠道</div>';
+            document.getElementById('batchTestModelsModal').classList.add('active');
+        }
+
+        function loadChannelModelsForTest() {
+            const channelId = document.getElementById('batchTestChannelId').value;
+            if (!channelId) {
+                document.getElementById('batchTestModelsContainer').innerHTML = '<div style="color:var(--text-dim);text-align:center;padding:20px;">请先选择渠道</div>';
+                return;
+            }
+            const ch = channels.find(c => c.id === channelId);
+            const models = parseModels(ch?.models);
+            if (models.length === 0) {
+                document.getElementById('batchTestModelsContainer').innerHTML = '<div style="color:var(--text-dim);text-align:center;padding:20px;">该渠道没有发现模型，请先在渠道管理中点击"发现"</div>';
+                return;
+            }
+            document.getElementById('batchTestModelsContainer').innerHTML = '<div style="margin-bottom:12px;"><label><input type="checkbox" id="selectAllTestModels" onchange="toggleSelectAllTestModels()"> 全选</label></div>' +
+                '<div class="model-grid">' +
+                models.map(m => `<div class="model-card" id="test-card-${m.replace(/\./g, '-')}">
+                    <div class="name"><label><input type="checkbox" class="test-model-cb" value="${m}"> ${m}</label></div>
+                    <div class="result" id="test-result-${m.replace(/\./g, '-')}"></div>
+                </div>`).join('') +
+                '</div>';
+        }
+
+        function toggleSelectAllTestModels() {
+            const checked = document.getElementById('selectAllTestModels').checked;
+            document.querySelectorAll('.test-model-cb').forEach(cb => cb.checked = checked);
+        }
+
+        async function runBatchModelTest() {
+            const channelId = document.getElementById('batchTestChannelId').value;
+            if (!channelId) { showToast('请选择渠道', true); return; }
+            const selected = Array.from(document.querySelectorAll('.test-model-cb:checked')).map(cb => cb.value);
+            if (selected.length === 0) { showToast('请选择要测试的模型', true); return; }
+            showToast(`开始测试 ${selected.length} 个模型...`);
+            for (const model of selected) {
+                const cardId = `test-card-${model.replace(/\./g, '-')}`;
+                const resultId = `test-result-${model.replace(/\./g, '-')}`;
+                document.getElementById(cardId).className = 'model-card testing';
+                document.getElementById(resultId).innerHTML = '<span class="spinner"></span>测试中';
+                try {
+                    const res = await fetch(API_BASE + `/api/channels/${channelId}/test-model`, {
+                        method: 'POST', headers: authHeaders(),
+                        body: JSON.stringify({ model })
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        document.getElementById(cardId).className = 'model-card success';
+                        document.getElementById(resultId).innerHTML = `<span class="result success">✓ 成功 (${data.latency_ms}ms)</span>`;
+                    } else {
+                        document.getElementById(cardId).className = 'model-card error';
+                        document.getElementById(resultId).innerHTML = `<span class="result error">✗ ${data.error || data.response}</span>`;
+                    }
+                } catch (e) {
+                    document.getElementById(cardId).className = 'model-card error';
+                    document.getElementById(resultId).innerHTML = `<span class="result error">✗ 网络错误</span>`;
+                }
+            }
+            showToast(`测试完成`);
+        }
+
+        function onEntryChannelChange() {
+            const channelId = document.getElementById('entryChannelId').value;
+            const modelsGroup = document.getElementById('entryModelsGroup');
+            const modelsContainer = document.getElementById('entryChannelModels');
+            if (!channelId) {
+                modelsGroup.style.display = 'none';
+                return;
+            }
+            const ch = channels.find(c => c.id === channelId);
+            const models = parseModels(ch?.models);
+            if (models.length === 0) {
+                modelsGroup.style.display = 'block';
+                modelsContainer.innerHTML = '<div style="color:var(--text-dim);font-size:12px;">该渠道没有发现模型，请先在渠道管理中点击"发现"</div>';
+                return;
+            }
+            selectedChannelModels = models;
+            modelsGroup.style.display = 'block';
+            modelsContainer.innerHTML = models.map(m => `<span class="model-tag" onclick="selectModelFromChannel('${m}')" title="点击添加">${m}</span>`).join('');
+        }
+
+        function selectModelFromChannel(model) {
+            document.getElementById('entryModel').value = model;
+        }
+
+        function addAllModelsAsRoutes() {
+            const channelId = document.getElementById('entryChannelId').value;
+            if (!channelId || selectedChannelModels.length === 0) return;
+            const weight = parseInt(document.getElementById('entryWeight').value) || 1;
+            const priority = parseInt(document.getElementById('entryPriority').value) || 0;
+            Promise.all(selectedChannelModels.map(model =>
+                fetch(API_BASE + '/api/entries', {
+                    method: 'POST', headers: authHeaders(),
+                    body: JSON.stringify({ model, channel_id: channelId, weight, priority })
+                })
+            )).then(() => {
+                closeModal('entryModal');
+                loadEntries();
+                showToast(`已添加 ${selectedChannelModels.length} 个路由`);
+            }).catch(() => showToast('批量添加失败', true));
+        }
+
+        function openEntryModal(entry = null) {
+            // 先加载渠道列表
+            const select = document.getElementById('entryChannelId');
+            select.innerHTML = channels.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+            document.getElementById('entryModelsGroup').style.display = 'none';
+            selectedChannelModels = [];
+            if (entry) {
+                document.getElementById('entryModalTitle').textContent = '编辑路由';
+                document.getElementById('entryModel').value = entry.model;
+                document.getElementById('entryDisplayName').value = entry.display_name || '';
+                document.getElementById('entryChannelId').value = entry.channel_id;
+                document.getElementById('entryWeight').value = entry.weight || 1;
+                document.getElementById('entryPriority').value = entry.priority || 0;
+                onEntryChannelChange();
+            } else {
+                document.getElementById('entryModalTitle').textContent = '添加路由';
+                document.getElementById('entryModel').value = '';
+                document.getElementById('entryDisplayName').value = '';
+                document.getElementById('entryWeight').value = 1;
+                document.getElementById('entryPriority').value = 0;
+            }
+            document.getElementById('entryModal').classList.add('active');
+        }
+
+        async function saveEntry() {
+            const model = document.getElementById('entryModel').value;
+            const channel_id = document.getElementById('entryChannelId').value;
+            const display_name = document.getElementById('entryDisplayName').value;
+            if (!model || !channel_id) { showToast('请填写完整信息', true); return; }
+            try {
+                const res = await fetch(API_BASE + '/api/entries', {
+                    method: 'POST', headers: authHeaders(),
+                    body: JSON.stringify({
+                        model, channel_id,
+                        display_name: display_name || null,
+                        weight: parseInt(document.getElementById('entryWeight').value) || 1,
+                        priority: parseInt(document.getElementById('entryPriority').value) || 0
+                    })
+                });
+                if (res.ok) { closeModal('entryModal'); loadEntries(); showToast('路由已添加'); }
+                else { const err = await res.json(); showToast(err.error || '添加失败', true); }
+            } catch (e) { showToast('网络错误', true); }
+        }
+
+        async function toggleEntry(id, enabled) {
+            await fetch(API_BASE + `/api/entries/${id}/toggle`, {
+                method: 'POST', headers: authHeaders(), body: JSON.stringify({ enabled })
+            });
+            loadEntries();
+        }
+
+        async function deleteEntry(id) {
+            if (!confirm('确定删除？')) return;
+            await fetch(API_BASE + `/api/entries/${id}`, { method: 'DELETE', headers: authHeaders() });
+            loadEntries();
+        }
+
+        async function loadKeys() {
+            try {
+                const keys = await fetch(API_BASE + '/api/keys', { headers: authHeaders() }).then(r => r.json());
+                document.getElementById('keysTable').innerHTML = keys.length ? keys.map(k => `<tr>
+                    <td><strong>${k.name}</strong></td>
+                    <td><code style="font-size:11px">${k.key}</code></td>
+                    <td>${k.usage_count ?? 0}</td>
+                    <td><span class="status-badge ${k.enabled ? 'enabled' : 'disabled'}">${k.enabled ? '启用' : '禁用'}</span></td>
+                    <td class="actions">
+                        <button class="btn btn-ghost btn-sm" onclick="toggleKey('${k.id}', ${!k.enabled})">${k.enabled ? '禁用' : '启用'}</button>
+                        <button class="btn btn-danger btn-sm" onclick="deleteKey('${k.id}')">删除</button>
+                    </td>
+                </tr>`).join('') : '<tr><td colspan="5" style="text-align:center;padding:40px;">暂无 Keys</td></tr>';
+            } catch (e) { console.error(e); }
+        }
+
+        function openKeyModal() { document.getElementById('keyName').value = ''; document.getElementById('keyModal').classList.add('active'); }
+
+        async function saveKey() {
+            const name = document.getElementById('keyName').value;
+            if (!name) { showToast('请输入名称', true); return; }
+            try {
+                const res = await fetch(API_BASE + '/api/keys', {
+                    method: 'POST', headers: authHeaders(), body: JSON.stringify({ name })
+                });
+                if (res.ok) { closeModal('keyModal'); loadKeys(); showToast('Key 已创建'); }
+                else { const err = await res.json(); showToast(err.error || '创建失败', true); }
+            } catch (e) { showToast('网络错误', true); }
+        }
+
+        async function toggleKey(id, enabled) {
+            await fetch(API_BASE + `/api/keys/${id}/toggle`, {
+                method: 'POST', headers: authHeaders(), body: JSON.stringify({ enabled })
+            });
+            loadKeys();
+        }
+
+        async function deleteKey(id) {
+            if (!confirm('确定删除？')) return;
+            await fetch(API_BASE + `/api/keys/${id}`, { method: 'DELETE', headers: authHeaders() });
+            loadKeys();
+        }
+
+        async function loadLogs() {
+            try {
+                const data = await fetch(API_BASE + '/api/logs?limit=100', { headers: authHeaders() }).then(r => r.json());
+                const logs = data.logs || [];
+                document.getElementById('logsContainer').innerHTML = logs.length ? logs.map(log => `<div class="log-item">
+                    <span class="log-time">${new Date(log.created_at).toLocaleString()}</span>
+                    <span class="log-model">${log.model || '-'}</span>
+                    <span class="log-status ${log.status_code === 200 ? 'success' : 'error'}">${log.status_code || 'err'}</span>
+                    <span class="log-latency">${log.latency_ms}ms</span>
+                    <span class="log-tokens">${log.prompt_tokens || 0} → ${log.completion_tokens || 0}</span>
+                    <span style="flex:1;color:var(--text-dim);font-size:11px;">${log.channel_name || ''} ${log.error ? log.error.slice(0, 50) : ''}</span>
+                </div>`).join('') : '<div class="empty-state"><p>暂无日志</p></div>';
+            } catch (e) { console.error(e); }
+        }
+
+        async function clearLogs() {
+            if (!confirm('确定清空所有日志？')) return;
+            await fetch(API_BASE + '/api/logs/clear', { method: 'POST', headers: authHeaders() });
+            loadLogs();
+        }
+
+        async function loadSettings() {
+            try {
+                const settings = await fetch(API_BASE + '/api/settings', { headers: authHeaders() }).then(r => r.json());
+                document.getElementById('settingTimeout').value = settings.timeout || 60000;
+                document.getElementById('settingRetry').value = settings.retry_times || 3;
+                document.getElementById('settingThreshold').value = settings.circuit_breaker_threshold || 5;
+                document.getElementById('settingResetTime').value = settings.circuit_breaker_reset_time || 300;
+            } catch (e) { console.error(e); }
+        }
+
+        async function saveSettings() {
+            try {
+                await fetch(API_BASE + '/api/settings', {
+                    method: 'PUT', headers: authHeaders(),
+                    body: JSON.stringify({
+                        timeout: parseInt(document.getElementById('settingTimeout').value),
+                        retry_times: parseInt(document.getElementById('settingRetry').value),
+                        circuit_breaker_threshold: parseInt(document.getElementById('settingThreshold').value),
+                        circuit_breaker_reset_time: parseInt(document.getElementById('settingResetTime').value)
+                    })
+                });
+                showToast('设置已保存');
+            } catch (e) { showToast('保存失败', true); }
+        }
+
+        async function changePassword() {
+            const oldPwd = document.getElementById('oldPassword').value;
+            const newPwd = document.getElementById('newPassword').value;
+            if (!oldPwd || !newPwd) { showToast('请填写密码', true); return; }
+            try {
+                const res = await fetch(API_BASE + '/api/change-password', {
+                    method: 'POST', headers: authHeaders(),
+                    body: JSON.stringify({ old_password: oldPwd, new_password: newPwd })
+                });
+                if (res.ok) { showToast('密码已修改'); document.getElementById('oldPassword').value = ''; document.getElementById('newPassword').value = ''; }
+                else { const err = await res.json(); showToast(err.error || '修改失败', true); }
+            } catch (e) { showToast('网络错误', true); }
+        }
+
+        function closeModal(id) { document.getElementById(id).classList.remove('active'); }
+
+        function showToast(msg, isError = false) {
+            const toast = document.getElementById('toast');
+            toast.textContent = msg; toast.className = 'toast show ' + (isError ? 'error' : 'success');
+            setTimeout(() => toast.classList.remove('show'), 3000);
+        }
+    </script>
+</body>
+</html>
