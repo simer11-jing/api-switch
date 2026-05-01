@@ -279,7 +279,7 @@ pub fn entry_routes() -> axum::Router<SharedState> {
     axum::Router::new()
         .route("/api/entries/reorder", axum::routing::post(reorder_entries))
         .route("/api/entries/:id/toggle", axum::routing::post(toggle_entry))
-        .route("/api/entries/:id", axum::routing::delete(delete_entry))
+        .route("/api/entries/:id", axum::routing::put(update_entry).delete(delete_entry))
         .route("/api/entries", axum::routing::get(list_entries).post(create_entry))
 }
 
@@ -322,6 +322,16 @@ async fn delete_entry(State(state): State<SharedState>, headers: HeaderMap, Path
     }
 }
 
+async fn update_entry(State(state): State<SharedState>, headers: HeaderMap, Path(id): Path<String>, Json(req): Json<UpdateEntry>) -> impl IntoResponse {
+    let _ = require_auth(&headers, &state).await;
+    let s = state.read().await;
+    match s.db.update_entry(&id, &req) {
+        Ok(Some(entry)) => Json(entry).into_response(),
+        Ok(None) => (StatusCode::NOT_FOUND, Json(serde_json::json!({ "error": "Not found" }))).into_response(),
+        Err(e) => (StatusCode::BAD_REQUEST, Json(serde_json::json!({ "error": e.to_string() }))).into_response(),
+    }
+}
+
 async fn reorder_entries(State(state): State<SharedState>, headers: HeaderMap, Json(body): Json<ReorderEntries>) -> impl IntoResponse {
     let _ = require_auth(&headers, &state).await;
     let s = state.read().await;
@@ -336,6 +346,9 @@ pub fn dashboard_routes() -> axum::Router<SharedState> {
         .route("/api/dashboard/stats", axum::routing::get(dashboard_stats))
         .route("/api/dashboard/models", axum::routing::get(model_ranking))
         .route("/api/dashboard/chart", axum::routing::get(chart_data))
+        .route("/api/dashboard/tree", axum::routing::get(channel_tree_stats))
+        .route("/api/model-tags", axum::routing::get(list_model_tags))
+        .route("/api/model-tags/query", axum::routing::get(query_model_tag))
 }
 
 async fn dashboard_stats(State(state): State<SharedState>, headers: HeaderMap) -> impl IntoResponse {
@@ -353,6 +366,32 @@ async fn model_ranking(State(state): State<SharedState>, headers: HeaderMap) -> 
     match s.db.get_model_ranking(10) {
         Ok(ranking) => Json(ranking).into_response(),
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": e.to_string() }))).into_response(),
+    }
+}
+
+async fn channel_tree_stats(State(state): State<SharedState>, headers: HeaderMap) -> impl IntoResponse {
+    let _ = require_auth(&headers, &state).await;
+    let s = state.read().await;
+    match s.db.get_channel_tree_stats() {
+        Ok(tree) => Json(tree).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": e.to_string() }))).into_response(),
+    }
+}
+
+async fn list_model_tags() -> impl IntoResponse {
+    let tags = crate::models::get_builtin_model_tags();
+    Json(tags)
+}
+
+#[derive(Debug, Deserialize)]
+struct QueryModelTag {
+    model: String,
+}
+
+async fn query_model_tag(Query(q): Query<QueryModelTag>) -> impl IntoResponse {
+    match crate::models::find_model_tag(&q.model) {
+        Some(tag) => Json(tag).into_response(),
+        None => (StatusCode::NOT_FOUND, Json(serde_json::json!({ "error": "Model not found in tag database" }))).into_response(),
     }
 }
 
@@ -375,6 +414,7 @@ pub fn channel_action_routes() -> axum::Router<SharedState> {
     axum::Router::new()
         .route("/api/channels/:id/test", axum::routing::post(test_channel))
         .route("/api/channels/:id/test-model", axum::routing::post(test_model))
+        .route("/api/channels/:id/test-embedding", axum::routing::post(test_embedding))
         .route("/api/channels/:id/discover", axum::routing::post(discover_models))
 }
 
@@ -432,21 +472,60 @@ async fn discover_models(State(state): State<SharedState>, headers: HeaderMap, P
         .timeout(std::time::Duration::from_secs(15))
         .send()
         .await;
+
     match result {
         Ok(resp) => {
-            let body: serde_json::Value = resp.json().await.unwrap_or_default();
-            let models: Vec<String> = body.get("data")
-                .and_then(|d| d.as_array())
-                .map(|arr| {
-                    arr.iter()
-                        .filter_map(|m| m.get("id").and_then(|id| id.as_str()).map(|s| s.to_string()))
-                        .collect()
-                })
-                .unwrap_or_default();
+            let status = resp.status().as_u16();
+            let body_text = resp.text().await.unwrap_or_default();
+            let body: serde_json::Value = serde_json::from_str(&body_text).unwrap_or(serde_json::Value::Null);
+
+            // 尝试多种格式解析模型列表
+            let mut models: Vec<String> = Vec::new();
+
+            // 格式1: OpenAI 标准 {"data": [{"id": "model-name"}, ...]}
+            if let Some(data) = body.get("data").and_then(|d| d.as_array()) {
+                for m in data {
+                    if let Some(id) = m.get("id").and_then(|id| id.as_str()) {
+                        models.push(id.to_string());
+                    }
+                }
+            }
+
+            // 格式2: 直接是模型列表 [{"id": "model-name"}, ...]
+            if models.is_empty() {
+                if let Some(arr) = body.as_array() {
+                    for m in arr {
+                        if let Some(id) = m.get("id").and_then(|id| id.as_str()) {
+                            models.push(id.to_string());
+                        } else if let Some(id) = m.as_str() {
+                            // 格式3: 直接是字符串数组 ["model1", "model2"]
+                            models.push(id.to_string());
+                        }
+                    }
+                }
+            }
+
+            // 格式4: 对象格式 {"model1": {...}, "model2": {...}}
+            if models.is_empty() {
+                if let Some(obj) = body.as_object() {
+                    for key in obj.keys() {
+                        if key != "object" && key != "data" {
+                            models.push(key.clone());
+                        }
+                    }
+                }
+            }
+
             if !models.is_empty() {
                 let _ = s.db.update_channel_models(&id, &models);
             }
-            Json(serde_json::json!({ "models": models, "count": models.len() })).into_response()
+
+            Json(serde_json::json!({
+                "models": models,
+                "count": models.len(),
+                "status": status,
+                "raw_response": body_text.chars().take(2000).collect::<String>()
+            })).into_response()
         }
         Err(e) => (StatusCode::BAD_GATEWAY, Json(serde_json::json!({ "error": e.to_string() }))).into_response(),
     }
@@ -455,6 +534,81 @@ async fn discover_models(State(state): State<SharedState>, headers: HeaderMap, P
 #[derive(Debug, Deserialize)]
 pub struct TestModelRequest {
     pub model: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct TestEmbeddingRequest {
+    pub model: String,
+    #[serde(default = "default_test_text")]
+    pub input: String,
+}
+
+fn default_test_text() -> String { "Hello, world!".into() }
+
+async fn test_embedding(State(state): State<SharedState>, headers: HeaderMap, Path(id): Path<String>, Json(req): Json<TestEmbeddingRequest>) -> impl IntoResponse {
+    let _ = require_auth(&headers, &state).await;
+    let s = state.read().await;
+    let channel = match s.db.get_channel(&id) {
+        Ok(Some(ch)) => ch,
+        _ => return (StatusCode::NOT_FOUND, Json(serde_json::json!({ "error": "Channel not found" }))).into_response(),
+    };
+    let client = reqwest::Client::new();
+    let start = std::time::Instant::now();
+
+    let result = client
+        .post(&format!("{}/v1/embeddings", channel.base_url.trim_end_matches('/')))
+        .header("Authorization", format!("Bearer {}", channel.api_key))
+        .header("Content-Type", "application/json")
+        .json(&serde_json::json!({
+            "model": req.model,
+            "input": req.input
+        }))
+        .timeout(std::time::Duration::from_secs(30))
+        .send()
+        .await;
+
+    match result {
+        Ok(resp) => {
+            let latency = start.elapsed().as_millis();
+            let status = resp.status().as_u16();
+            let body = resp.text().await.unwrap_or_default();
+            // 解析返回的向量维度
+            let embedding_info = parse_embedding_response(&body);
+            Json(serde_json::json!({
+                "success": status >= 200 && status < 300,
+                "status": status,
+                "latency_ms": latency,
+                "dimensions": embedding_info.dimensions,
+                "tokens": embedding_info.tokens,
+                "response": body.chars().take(300).collect::<String>()
+            })).into_response()
+        }
+        Err(e) => Json(serde_json::json!({
+            "success": false,
+            "error": e.to_string()
+        })).into_response(),
+    }
+}
+
+struct EmbeddingInfo {
+    dimensions: Option<usize>,
+    tokens: Option<i64>,
+}
+
+fn parse_embedding_response(body: &str) -> EmbeddingInfo {
+    if let Ok(v) = serde_json::from_str::<serde_json::Value>(body) {
+        let dimensions = v.get("data")
+            .and_then(|d| d.as_array())
+            .and_then(|arr| arr.first())
+            .and_then(|item| item.get("embedding"))
+            .and_then(|emb| emb.as_array())
+            .map(|arr| arr.len());
+        let tokens = v.get("usage")
+            .and_then(|u| u.get("total_tokens"))
+            .and_then(|t| t.as_i64());
+        return EmbeddingInfo { dimensions, tokens };
+    }
+    EmbeddingInfo { dimensions: None, tokens: None }
 }
 
 async fn test_model(State(state): State<SharedState>, headers: HeaderMap, Path(id): Path<String>, Json(req): Json<TestModelRequest>) -> impl IntoResponse {
@@ -467,22 +621,73 @@ async fn test_model(State(state): State<SharedState>, headers: HeaderMap, Path(i
     let client = reqwest::Client::new();
     let start = std::time::Instant::now();
 
-    // 根据API类型选择不同的测试方式
-    // 向量模型和语音模型只需要连通测试，不需要发送实际请求
-    let result = match channel.api_type.as_str() {
-        "embedding" | "tts" | "whisper" => {
-            // 向量/语音模型：只测试API连通性
-            client
-                .get(&format!("{}/v1/models", channel.base_url.trim_end_matches('/')))
+    // 使用模型标签系统判断模型类型
+    let model_tag = crate::models::find_model_tag(&req.model);
+    let model_type = model_tag.as_ref().map(|t| t.model_type.clone()).unwrap_or(crate::models::ModelType::Chat);
+
+    let (test_type, test_url, result) = match model_type {
+        crate::models::ModelType::Embedding => {
+            let url = format!("{}/v1/embeddings", channel.base_url.trim_end_matches('/'));
+            let res = client
+                .post(&url)
+                .header("Authorization", format!("Bearer {}", channel.api_key))
+                .header("Content-Type", "application/json")
+                .json(&serde_json::json!({
+                    "model": req.model,
+                    "input": "Hello, world!"
+                }))
+                .timeout(std::time::Duration::from_secs(30))
+                .send()
+                .await;
+            ("embedding", url, res)
+        }
+        crate::models::ModelType::Rerank => {
+            let url = format!("{}/v1/rerank", channel.base_url.trim_end_matches('/'));
+            let res = client
+                .post(&url)
+                .header("Authorization", format!("Bearer {}", channel.api_key))
+                .header("Content-Type", "application/json")
+                .json(&serde_json::json!({
+                    "model": req.model,
+                    "query": "What is the capital of France?",
+                    "documents": ["Paris is the capital of France.", "London is the capital of the UK."]
+                }))
+                .timeout(std::time::Duration::from_secs(30))
+                .send()
+                .await;
+            ("rerank", url, res)
+        }
+        crate::models::ModelType::TTS => {
+            let url = format!("{}/v1/audio/speech", channel.base_url.trim_end_matches('/'));
+            let res = client
+                .post(&url)
+                .header("Authorization", format!("Bearer {}", channel.api_key))
+                .header("Content-Type", "application/json")
+                .json(&serde_json::json!({
+                    "model": req.model,
+                    "input": "Hi",
+                    "voice": "alloy"
+                }))
+                .timeout(std::time::Duration::from_secs(30))
+                .send()
+                .await;
+            ("tts", url, res)
+        }
+        crate::models::ModelType::Whisper => {
+            let url = format!("{}/v1/models", channel.base_url.trim_end_matches('/'));
+            let res = client
+                .get(&url)
                 .header("Authorization", format!("Bearer {}", channel.api_key))
                 .timeout(std::time::Duration::from_secs(15))
                 .send()
-                .await
+                .await;
+            ("whisper", url, res)
         }
         _ => {
-            // Chat模型：发送简单的chat请求
-            client
-                .post(&format!("{}/v1/chat/completions", channel.base_url.trim_end_matches('/')))
+            // Chat / Vision / Image 默认用 chat completions
+            let url = format!("{}/v1/chat/completions", channel.base_url.trim_end_matches('/'));
+            let res = client
+                .post(&url)
                 .header("Authorization", format!("Bearer {}", channel.api_key))
                 .header("Content-Type", "application/json")
                 .json(&serde_json::json!({
@@ -492,7 +697,8 @@ async fn test_model(State(state): State<SharedState>, headers: HeaderMap, Path(i
                 }))
                 .timeout(std::time::Duration::from_secs(30))
                 .send()
-                .await
+                .await;
+            ("chat", url, res)
         }
     };
 
@@ -501,15 +707,40 @@ async fn test_model(State(state): State<SharedState>, headers: HeaderMap, Path(i
             let latency = start.elapsed().as_millis();
             let status = resp.status().as_u16();
             let body = resp.text().await.unwrap_or_default();
-            Json(serde_json::json!({
+
+            let is_embedding = model_type == crate::models::ModelType::Embedding;
+            let (dimensions, tokens) = if is_embedding {
+                let info = parse_embedding_response(&body);
+                (info.dimensions, info.tokens)
+            } else {
+                (None, None)
+            };
+
+            let mut response_json = serde_json::json!({
                 "success": status >= 200 && status < 300,
                 "status": status,
                 "latency_ms": latency,
-                "response": body.chars().take(200).collect::<String>()
-            })).into_response()
+                "test_type": test_type,
+                "test_url": test_url,
+                "model_type": model_type.to_string(),
+                "response": body.chars().take(500).collect::<String>()
+            });
+            if let Some(d) = dimensions {
+                response_json["dimensions"] = serde_json::Value::Number((d as i64).into());
+            }
+            if let Some(t) = tokens {
+                response_json["tokens"] = serde_json::Value::Number(t.into());
+            }
+            if let Some(tag) = model_tag {
+                response_json["context_window"] = serde_json::Value::Number(tag.context_window.into());
+                response_json["provider"] = serde_json::Value::String(tag.provider);
+            }
+            Json(response_json).into_response()
         }
         Err(e) => Json(serde_json::json!({
             "success": false,
+            "test_type": test_type,
+            "test_url": test_url,
             "error": e.to_string()
         })).into_response(),
     }

@@ -1,7 +1,6 @@
 use rusqlite::{params, Connection};
 use crate::models::*;
 use std::sync::Mutex;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 pub struct Database {
     pub conn: Mutex<Connection>,
@@ -266,6 +265,49 @@ impl Database {
         let conn = self.conn.lock().unwrap();
         let affected = conn.execute("DELETE FROM entries WHERE id = ?1", params![id])?;
         Ok(affected > 0)
+    }
+
+    pub fn update_entry(&self, id: &str, req: &UpdateEntry) -> Result<Option<ApiEntry>, rusqlite::Error> {
+        let conn = self.conn.lock().unwrap();
+        let existing = conn.query_row(
+            "SELECT id, channel_id, model, display_name, enabled, priority, sort_index, weight, response_ms, cooldown_until, created_at FROM entries WHERE id = ?1",
+            params![id],
+            |row| Ok(ApiEntry {
+                id: row.get(0)?,
+                channel_id: row.get(1)?,
+                channel_name: None,
+                model: row.get(2)?,
+                display_name: row.get(3)?,
+                enabled: row.get::<_, i32>(4)? != 0,
+                priority: row.get(5)?,
+                sort_index: row.get(6)?,
+                weight: row.get(7)?,
+                response_ms: row.get(8)?,
+                cooldown_until: row.get(9)?,
+                created_at: row.get(10)?,
+            }),
+        );
+        let mut entry = match existing {
+            Ok(e) => e,
+            Err(rusqlite::Error::QueryReturnedNoRows) => return Ok(None),
+            Err(e) => return Err(e),
+        };
+        if let Some(v) = &req.channel_id { entry.channel_id = v.clone(); }
+        if let Some(v) = &req.model { entry.model = v.clone(); }
+        if let Some(v) = &req.display_name { entry.display_name = Some(v.clone()); }
+        if let Some(v) = req.priority { entry.priority = v; }
+        if let Some(v) = req.weight { entry.weight = v; }
+        conn.execute(
+            "UPDATE entries SET channel_id = ?1, model = ?2, display_name = ?3, priority = ?4, weight = ?5 WHERE id = ?6",
+            params![entry.channel_id, entry.model, entry.display_name, entry.priority, entry.weight, id],
+        )?;
+        let channel_name: Option<String> = conn.query_row(
+            "SELECT name FROM channels WHERE id = ?1",
+            params![entry.channel_id],
+            |r| r.get(0),
+        ).ok();
+        entry.channel_name = channel_name;
+        Ok(Some(entry))
     }
 
     pub fn reorder_entries(&self, ordered_ids: &[String]) -> Result<(), rusqlite::Error> {
@@ -672,6 +714,54 @@ impl Database {
             })
         })?;
         rows.collect()
+    }
+
+    pub fn get_channel_tree_stats(&self) -> Result<Vec<ChannelTreeStats>, rusqlite::Error> {
+        let conn = self.conn.lock().unwrap();
+        // 获取所有渠道
+        let channels: Vec<(String, String)> = {
+            let mut stmt = conn.prepare("SELECT id, name FROM channels ORDER BY name")?;
+            let rows = stmt.query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?;
+            rows.collect::<Result<Vec<_>, _>>()?
+        };
+
+        let mut result = Vec::new();
+        for (channel_id, channel_name) in channels {
+            // 获取该渠道的模型统计
+            let mut stmt = conn.prepare(
+                "SELECT model, COUNT(*) as requests, COALESCE(SUM(prompt_tokens + completion_tokens), 0) as tokens,
+                        SUM(CASE WHEN status_code >= 200 AND status_code < 300 THEN 1 ELSE 0 END) as success_count,
+                        SUM(CASE WHEN status_code >= 400 OR status_code = 0 THEN 1 ELSE 0 END) as error_count
+                 FROM logs WHERE channel_id = ?1 AND model IS NOT NULL AND model != ''
+                 GROUP BY model ORDER BY requests DESC"
+            )?;
+            let model_rows = stmt.query_map(params![&channel_id], |row| {
+                Ok(ModelTreeStats {
+                    model: row.get(0)?,
+                    requests: row.get(1)?,
+                    tokens: row.get(2)?,
+                    success_count: row.get(3)?,
+                    error_count: row.get(4)?,
+                })
+            })?;
+            let models: Vec<ModelTreeStats> = model_rows.collect::<Result<Vec<_>, _>>()?;
+
+            let total_requests: i64 = models.iter().map(|m| m.requests).sum();
+            let total_tokens: i64 = models.iter().map(|m| m.tokens).sum();
+
+            if !models.is_empty() {
+                result.push(ChannelTreeStats {
+                    channel_id,
+                    channel_name,
+                    total_requests,
+                    total_tokens,
+                    models,
+                });
+            }
+        }
+        // 按总请求数排序
+        result.sort_by(|a, b| b.total_requests.cmp(&a.total_requests));
+        Ok(result)
     }
 
     pub fn reset_model_breaker(&self, channel_id: &str, model: &str) -> Result<(), rusqlite::Error> {

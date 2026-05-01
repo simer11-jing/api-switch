@@ -155,6 +155,23 @@
         .test-modal .model-card .result { font-size: 11px; color: var(--text-dim); }
         .test-modal .model-card .result.success { color: var(--success); }
         .test-modal .model-card .result.error { color: var(--danger); }
+
+        .tree-container { font-size: 13px; }
+        .tree-channel { margin-bottom: 8px; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+        .tree-channel-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; background: var(--bg); cursor: pointer; }
+        .tree-channel-header:hover { background: var(--accent-light); }
+        .tree-channel-name { font-weight: 600; display: flex; align-items: center; gap: 8px; }
+        .tree-channel-name .expand-icon { transition: transform 0.2s; font-size: 10px; }
+        .tree-channel-header.expanded .expand-icon { transform: rotate(90deg); }
+        .tree-channel-stats { display: flex; gap: 16px; font-size: 12px; color: var(--text-dim); }
+        .tree-channel-stats span { display: flex; align-items: center; gap: 4px; }
+        .tree-models { display: none; padding: 8px 16px 12px; border-top: 1px solid var(--border); background: var(--card); }
+        .tree-models.show { display: block; }
+        .tree-model-item { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; margin: 4px 0; background: var(--bg); border-radius: 4px; font-size: 12px; }
+        .tree-model-name { font-weight: 500; }
+        .tree-model-stats { display: flex; gap: 12px; color: var(--text-dim); }
+        .tree-model-stats .success { color: var(--success); }
+        .tree-model-stats .error { color: var(--danger); }
     </style>
 </head>
 <body>
@@ -184,6 +201,7 @@
                 <div class="nav-item active" data-page="dashboard" onclick="showPage('dashboard')">仪表盘</div>
                 <div class="nav-item" data-page="channels" onclick="showPage('channels')">渠道管理</div>
                 <div class="nav-item" data-page="entries" onclick="showPage('entries')">模型路由</div>
+                <div class="nav-item" data-page="modeltags" onclick="showPage('modeltags')">模型标签</div>
                 <div class="nav-item" data-page="keys" onclick="showPage('keys')">API Keys</div>
                 <div class="nav-item" data-page="logs" onclick="showPage('logs')">请求日志</div>
                 <div class="nav-item" data-page="settings" onclick="showPage('settings')">设置</div>
@@ -208,6 +226,10 @@
                     <div class="stat-card"><div class="stat-label">Token 输出</div><div class="stat-value" id="statCompletion">-</div></div>
                     <div class="stat-card"><div class="stat-label">渠道数</div><div class="stat-value" id="statChannels">-</div></div>
                     <div class="stat-card"><div class="stat-label">API Keys</div><div class="stat-value" id="statKeys">-</div></div>
+                </div>
+                <div class="card">
+                    <div class="card-title">模型调用统计 (按渠道)</div>
+                    <div id="channelTreeStats"></div>
                 </div>
                 <div class="card">
                     <div class="card-title">最近请求</div>
@@ -261,6 +283,7 @@
                                 <th>模型</th>
                                 <th>映射名称</th>
                                 <th>渠道</th>
+                                <th>标签</th>
                                 <th>权重</th>
                                 <th>优先级</th>
                                 <th>熔断</th>
@@ -269,6 +292,40 @@
                             </tr>
                         </thead>
                         <tbody id="entriesTable"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Model Tags -->
+            <div id="modeltagsPage" class="page">
+                <div class="page-header">
+                    <h2 class="page-title">模型标签</h2>
+                    <div style="display:flex;gap:12px;">
+                        <input type="text" id="tagSearchInput" placeholder="搜索模型..." style="padding:6px 12px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);width:200px;" oninput="filterModelTags()">
+                        <button class="btn btn-primary" onclick="openModelTagModal()">+ 添加标签</button>
+                    </div>
+                </div>
+                <div class="stats-grid" style="margin-bottom:16px;">
+                    <div class="stat-card"><div class="stat-label">Chat 模型</div><div class="stat-value" id="tagCountChat">-</div></div>
+                    <div class="stat-card"><div class="stat-label">Embedding</div><div class="stat-value" id="tagCountEmbedding">-</div></div>
+                    <div class="stat-card"><div class="stat-label">Rerank</div><div class="stat-value" id="tagCountRerank">-</div></div>
+                    <div class="stat-card"><div class="stat-label">TTS/Whisper</div><div class="stat-value" id="tagCountAudio">-</div></div>
+                    <div class="stat-card"><div class="stat-label">Vision/Image</div><div class="stat-value" id="tagCountVision">-</div></div>
+                </div>
+                <div class="card">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>模型名称</th>
+                                <th>类型</th>
+                                <th>上下文</th>
+                                <th>最大输出</th>
+                                <th>提供商</th>
+                                <th>描述</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="modelTagsTable"></tbody>
                     </table>
                 </div>
             </div>
@@ -373,7 +430,9 @@
                             <option value="gemini">Google Gemini</option>
                             <option value="azure">Azure OpenAI</option>
                             <option value="embedding">Embedding/向量</option>
-                            <option value="tts">TTS/语音</option>
+                            <option value="rerank">Rerank/重排</option>
+                            <option value="tts">TTS/语音合成</option>
+                            <option value="whisper">Whisper/语音识别</option>
                             <option value="custom">Custom</option>
                         </select>
                     </div>
@@ -393,11 +452,14 @@
                 <div class="form-group">
                     <label>可用模型</label>
                     <div id="channelModelsTags"></div>
-                    <div style="margin-top:8px;display:flex;gap:8px;align-items:center;">
+                    <div style="margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                        <input type="text" id="manualModelInput" placeholder="手动输入模型名" style="width:180px;padding:6px 10px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:12px;">
+                        <button class="btn btn-ghost btn-sm" onclick="addManualModel()">+ 添加</button>
                         <button class="btn btn-ghost btn-sm" onclick="discoverModelsInModal()">发现模型</button>
                         <button class="btn btn-ghost btn-sm" onclick="testChannelFromModal()">测试渠道</button>
-                        <span id="discoverStatus" style="margin-left:10px;color:var(--text-dim);font-size:12px;"></span>
                     </div>
+                    <div id="discoverStatus" style="margin-top:8px;color:var(--text-dim);font-size:12px;"></div>
+                    <div id="discoverRawResponse" style="margin-top:8px;max-height:150px;overflow-y:auto;font-size:11px;font-family:monospace;background:var(--bg);padding:8px;border-radius:4px;display:none;"></div>
                 </div>
             </div>
             <div class="modal-footer">
@@ -409,26 +471,44 @@
 
     <!-- Entry Modal -->
     <div id="entryModal" class="modal-overlay">
-        <div class="modal">
+        <div class="modal" style="width:750px;">
             <div class="modal-header">
                 <h3 class="modal-title" id="entryModalTitle">添加路由</h3>
                 <button class="modal-close" onclick="closeModal('entryModal')">&times;</button>
             </div>
             <div class="modal-body">
+                <input type="hidden" id="entryId">
                 <div class="form-group">
                     <label>渠道 *</label>
                     <select id="entryChannelId" class="form-select" onchange="onEntryChannelChange()"></select>
                 </div>
                 <div class="form-group" id="entryModelsGroup" style="display:none;">
-                    <label>选择模型 (从渠道模型中选择)</label>
+                    <label>选择模型 (从渠道模型中选择，可多选)</label>
                     <div id="entryChannelModels" class="model-list"></div>
+                    <div style="margin-top:8px;display:flex;gap:8px;align-items:center;">
+                        <button class="btn btn-ghost btn-sm" onclick="selectAllEntryModels()">全选</button>
+                        <button class="btn btn-ghost btn-sm" onclick="clearSelectedEntryModels()">清除选择</button>
+                        <span id="selectedModelCount" style="color:var(--text-dim);font-size:12px;"></span>
+                    </div>
                     <div style="margin-top:8px;">
-                        <button class="btn btn-ghost btn-sm" onclick="addAllModelsAsRoutes()">+ 添加所有模型为路由</button>
+                        <button class="btn btn-primary btn-sm" onclick="addSelectedModelsAsRoutes()">添加选中的模型为路由</button>
                     </div>
                 </div>
                 <div class="form-group">
                     <label>模型名称 * (手动输入或从上方选择)</label>
-                    <input type="text" id="entryModel" placeholder="例如: gpt-4 或从上方选择">
+                    <div style="display:flex;gap:8px;align-items:center;">
+                        <input type="text" id="entryModel" placeholder="例如: gpt-4o 或 BAAI/bge-m3" style="flex:1" oninput="onEntryModelInput()">
+                        <select id="entryModelSuggest" class="form-select" style="width:200px;display:none;" onchange="selectSuggestedModel()">
+                        </select>
+                    </div>
+                </div>
+                <!-- 标签匹配区域 -->
+                <div id="entryTagMatch" style="display:none;margin-bottom:16px;padding:12px;background:var(--bg);border-radius:6px;border:1px solid var(--border);">
+                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+                        <span style="font-size:13px;font-weight:500;">标签匹配</span>
+                        <button class="btn btn-ghost btn-sm" onclick="openAddTagForEntry()">+ 添加标签</button>
+                    </div>
+                    <div id="entryTagInfo" style="font-size:12px;"></div>
                 </div>
                 <div class="form-group">
                     <label>映射名称 (显示别名，可选)</label>
@@ -466,6 +546,10 @@
                         <option value="">-- 选择渠道 --</option>
                     </select>
                 </div>
+                <div class="form-group" id="embeddingTestInput" style="display:none;">
+                    <label>测试文本 (向量模型)</label>
+                    <input type="text" id="embeddingTestText" value="Hello, world!" placeholder="输入测试文本">
+                </div>
                 <div id="batchTestModelsContainer"></div>
             </div>
             <div class="modal-footer">
@@ -495,6 +579,58 @@
         </div>
     </div>
 
+    <!-- Model Tag Modal -->
+    <div id="modelTagModal" class="modal-overlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 class="modal-title" id="modelTagModalTitle">添加模型标签</h3>
+                <button class="modal-close" onclick="closeModal('modelTagModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>模型名称 *</label>
+                    <input type="text" id="tagModel" placeholder="例如: gpt-4o 或 BAAI/bge-m3">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>模型类型 *</label>
+                        <select id="tagModelType" class="form-select">
+                            <option value="chat">Chat 对话</option>
+                            <option value="embedding">Embedding 向量</option>
+                            <option value="rerank">Rerank 重排</option>
+                            <option value="tts">TTS 语音合成</option>
+                            <option value="whisper">Whisper 语音识别</option>
+                            <option value="vision">Vision 视觉</option>
+                            <option value="image">Image 图像生成</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>提供商</label>
+                        <input type="text" id="tagProvider" placeholder="例如: OpenAI">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>上下文窗口</label>
+                        <input type="number" id="tagContextWindow" placeholder="4096">
+                    </div>
+                    <div class="form-group">
+                        <label>最大输出 Token</label>
+                        <input type="number" id="tagMaxOutput" placeholder="4096">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>描述</label>
+                    <input type="text" id="tagDescription" placeholder="模型描述">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-ghost" onclick="closeModal('modelTagModal')">取消</button>
+                <button class="btn btn-primary" onclick="saveModelTag()">保存</button>
+            </div>
+        </div>
+    </div>
+
     <div id="toast" class="toast"></div>
 
     <script>
@@ -504,6 +640,8 @@
         let allModels = [];
         let selectedChannelModels = [];
         let selectedChannels = new Set();
+        let entriesList = [];
+        let modelTagsCache = [];
 
         const API_BASE = '';
 
@@ -556,6 +694,7 @@
             if (page === 'dashboard') loadDashboard();
             else if (page === 'channels') { loadChannels(); document.getElementById('batchTestBar').style.display = 'flex'; }
             else if (page === 'entries') loadEntries();
+            else if (page === 'modeltags') loadModelTags();
             else if (page === 'keys') loadKeys();
             else if (page === 'logs') loadLogs();
             else if (page === 'settings') loadSettings();
@@ -563,11 +702,12 @@
 
         async function loadDashboard() {
             try {
-                const [stats, logsData, chs, kys] = await Promise.all([
+                const [stats, logsData, chs, kys, treeStats] = await Promise.all([
                     fetch(API_BASE + '/api/dashboard/stats', { headers: authHeaders() }).then(r => r.json()),
                     fetch(API_BASE + '/api/logs?limit=20', { headers: authHeaders() }).then(r => r.json()),
                     fetch(API_BASE + '/api/channels', { headers: authHeaders() }).then(r => r.json()),
-                    fetch(API_BASE + '/api/keys', { headers: authHeaders() }).then(r => r.json())
+                    fetch(API_BASE + '/api/keys', { headers: authHeaders() }).then(r => r.json()),
+                    fetch(API_BASE + '/api/dashboard/tree', { headers: authHeaders() }).then(r => r.json())
                 ]);
                 document.getElementById('statTotal').textContent = stats.total_requests ?? 0;
                 document.getElementById('statToday').textContent = stats.today_requests ?? 0;
@@ -575,6 +715,10 @@
                 document.getElementById('statCompletion').textContent = (stats.total_completion_tokens ?? 0).toLocaleString();
                 document.getElementById('statChannels').textContent = chs ? chs.length : 0;
                 document.getElementById('statKeys').textContent = kys ? kys.length : 0;
+
+                // 渲染树状图
+                renderChannelTree(treeStats);
+
                 const logs = logsData.logs || [];
                 document.getElementById('recentLogs').innerHTML = logs.length ? logs.map(log => `
                     <div class="log-item">
@@ -585,6 +729,48 @@
                         <span class="log-tokens">${log.prompt_tokens || 0} → ${log.completion_tokens || 0}</span>
                     </div>`).join('') : '<div class="empty-state"><p>暂无日志</p></div>';
             } catch (e) { console.error(e); }
+        }
+
+        function renderChannelTree(treeStats) {
+            if (!treeStats || treeStats.length === 0) {
+                document.getElementById('channelTreeStats').innerHTML = '<div class="empty-state"><p>暂无调用数据</p></div>';
+                return;
+            }
+            document.getElementById('channelTreeStats').innerHTML = '<div class="tree-container">' +
+                treeStats.map((ch, idx) => `
+                    <div class="tree-channel">
+                        <div class="tree-channel-header" onclick="toggleTreeChannel(this)">
+                            <div class="tree-channel-name">
+                                <span class="expand-icon">▶</span>
+                                ${ch.channel_name}
+                            </div>
+                            <div class="tree-channel-stats">
+                                <span>📊 ${ch.total_requests} 请求</span>
+                                <span>🔢 ${ch.total_tokens.toLocaleString()} tokens</span>
+                            </div>
+                        </div>
+                        <div class="tree-models" id="tree-models-${idx}">
+                            ${ch.models.map(m => `
+                                <div class="tree-model-item">
+                                    <span class="tree-model-name">${m.model}</span>
+                                    <div class="tree-model-stats">
+                                        <span>📊 ${m.requests}</span>
+                                        <span>🔢 ${m.tokens.toLocaleString()}</span>
+                                        <span class="success">✓ ${m.success_count}</span>
+                                        ${m.error_count > 0 ? `<span class="error">✗ ${m.error_count}</span>` : ''}
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `).join('') +
+                '</div>';
+        }
+
+        function toggleTreeChannel(header) {
+            header.classList.toggle('expanded');
+            const models = header.nextElementSibling;
+            models.classList.toggle('show');
         }
 
         async function loadChannels() {
@@ -697,7 +883,7 @@
         function renderModelTags() {
             document.getElementById('channelModelsTags').innerHTML = allModels.length ?
                 allModels.map(m => `<span class="model-tag">${m}<button onclick="removeModel('${m}')">&times;</button></span>`).join('') :
-                '<span style="color:var(--text-dim);font-size:12px;">无模型</span>';
+                '<span style="color:var(--text-dim);font-size:12px;">无模型，点击"发现模型"或手动添加</span>';
         }
 
         function removeModel(model) {
@@ -705,11 +891,23 @@
             renderModelTags();
         }
 
+        function addManualModel() {
+            const input = document.getElementById('manualModelInput');
+            const model = input.value.trim();
+            if (!model) { showToast('请输入模型名称', true); return; }
+            if (allModels.includes(model)) { showToast('模型已存在', true); return; }
+            allModels.push(model);
+            renderModelTags();
+            input.value = '';
+            showToast(`已添加模型: ${model}`);
+        }
+
         async function discoverModelsInModal() {
             const baseUrl = document.getElementById('channelBaseUrl').value;
             const apiKey = document.getElementById('channelApiKey').value;
             if (!baseUrl || !apiKey) { showToast('请先填写 Base URL 和 API Key', true); return; }
             document.getElementById('discoverStatus').innerHTML = '<span class="spinner"></span>发现中...';
+            document.getElementById('discoverRawResponse').style.display = 'none';
             try {
                 // 先保存渠道以获取ID
                 let channelId = document.getElementById('channelId').value;
@@ -737,14 +935,36 @@
                     method: 'POST', headers: authHeaders()
                 });
                 const data = await discoverRes.json();
-                allModels = data.models || [];
+                const newModels = data.models || [];
+                // 合并新旧模型，去重
+                const modelSet = new Set([...allModels, ...newModels]);
+                allModels = Array.from(modelSet);
                 renderModelTags();
-                document.getElementById('discoverStatus').textContent = `发现 ${allModels.length} 个模型`;
-                if (allModels.length) showToast(`发现 ${allModels.length} 个模型`);
+
+                // 显示状态和原始响应
+                document.getElementById('discoverStatus').innerHTML = `发现 <strong>${newModels.length}</strong> 个模型 (共 <strong>${allModels.length}</strong> 个)`;
+
+                if (data.raw_response) {
+                    const rawDiv = document.getElementById('discoverRawResponse');
+                    rawDiv.style.display = 'block';
+                    rawDiv.innerHTML = `<div style="color:var(--text-dim);margin-bottom:4px;">API 原始响应:</div><pre style="white-space:pre-wrap;word-break:break-all;margin:0;">${escapeHtml(data.raw_response)}</pre>`;
+                }
+
+                if (newModels.length) {
+                    showToast(`发现 ${newModels.length} 个模型`);
+                } else {
+                    showToast('未发现模型，请检查 API 或手动添加', true);
+                }
             } catch (e) {
-                document.getElementById('discoverStatus').textContent = '发现失败';
+                document.getElementById('discoverStatus').textContent = '发现失败: ' + e.message;
                 showToast('发现模型失败', true);
             }
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
         }
 
         async function testChannelFromModal() {
@@ -864,31 +1084,49 @@
 
         async function loadEntries() {
             try {
-                const [entries, chs] = await Promise.all([
+                const [entries, chs, tags] = await Promise.all([
                     fetch(API_BASE + '/api/entries', { headers: authHeaders() }).then(r => r.json()),
-                    fetch(API_BASE + '/api/channels', { headers: authHeaders() }).then(r => r.json())
+                    fetch(API_BASE + '/api/channels', { headers: authHeaders() }).then(r => r.json()),
+                    fetch(API_BASE + '/api/model-tags', { headers: authHeaders() }).then(r => r.json()).catch(() => [])
                 ]);
                 channels = chs;
+                entriesList = entries;
+                modelTagsCache = tags || [];
                 const chMap = {}; channels.forEach(c => chMap[c.id] = c.name);
+
+                const typeColors = { chat: '#3b82f6', embedding: '#8b5cf6', rerank: '#f59e0b', tts: '#ec4899', whisper: '#ec4899', vision: '#10b981', image: '#10b981' };
+                const typeNames = { chat: '对话', embedding: '向量', rerank: '重排', tts: 'TTS', whisper: '语音', vision: '视觉', image: '图像' };
+
                 document.getElementById('entriesTable').innerHTML = entries.length ? entries.map(e => {
                     const cooling = e.cooldown_until && e.cooldown_until > Date.now() / 1000;
+                    // 查找匹配的标签
+                    const tag = modelTagsCache.find(t => t.model === e.model || e.model.startsWith(t.model) || t.model.startsWith(e.model));
+                    const tagHtml = tag ? `<span class="status-badge" style="background:${typeColors[tag.model_type] || '#64748b'}20;color:${typeColors[tag.model_type] || '#64748b'}">${typeNames[tag.model_type] || tag.model_type}</span>` : '<span style="color:var(--text-dim)">-</span>';
                     return `<tr>
                         <td><strong>${e.model}</strong></td>
                         <td><em>${e.display_name || '-'}</em></td>
                         <td>${chMap[e.channel_id] || '-'}</td>
+                        <td>${tagHtml}</td>
                         <td>${e.weight || 1}</td>
                         <td>${e.priority || 0}</td>
                         <td><span class="status-badge ${cooling ? 'cooling' : ''}">${cooling ? '冷却中' : '正常'}</span></td>
                         <td><span class="status-badge ${e.enabled ? 'enabled' : 'disabled'}">${e.enabled ? '启用' : '禁用'}</span></td>
                         <td class="actions">
                             <button class="btn btn-ghost btn-sm" onclick="testSingleModel('${e.channel_id}', '${e.model}')">测试</button>
-                            <button class="btn btn-ghost btn-sm" onclick="openEntryModal(${JSON.stringify(e).replace(/'/g, "\\'")})">编辑</button>
+                            <button class="btn btn-ghost btn-sm" onclick="editEntry('${e.id}')">编辑</button>
                             <button class="btn btn-ghost btn-sm" onclick="toggleEntry('${e.id}', ${!e.enabled})">${e.enabled ? '禁用' : '启用'}</button>
                             <button class="btn btn-danger btn-sm" onclick="deleteEntry('${e.id}')">删除</button>
                         </td>
                     </tr>`;
-                }).join('') : '<tr><td colspan="8" style="text-align:center;padding:40px;">暂无路由</td></tr>';
+                }).join('') : '<tr><td colspan="9" style="text-align:center;padding:40px;">暂无路由</td></tr>';
             } catch (e) { console.error(e); }
+        }
+
+        function editEntry(entryId) {
+            const entry = entriesList.find(e => e.id === entryId);
+            if (entry) {
+                openEntryModal(entry);
+            }
         }
 
         async function testSingleModel(channelId, model) {
@@ -902,12 +1140,29 @@
                 });
                 const data = await res.json();
                 if (data.success) {
-                    showToast(`${model}: 成功 (${data.latency_ms}ms)`);
+                    let msg = `${model}: 成功 (${data.latency_ms}ms)`;
+                    if (data.dimensions) msg += ` [${data.dimensions}维]`;
+                    if (data.tokens) msg += ` ${data.tokens} tokens`;
+                    showToast(msg);
                 } else {
-                    showToast(`${model}: 失败 - ${data.error || data.response}`, true);
+                    // 显示详细错误信息
+                    let errorMsg = data.error || '未知错误';
+                    if (data.response) {
+                        // 尝试解析错误响应
+                        try {
+                            const respJson = JSON.parse(data.response);
+                            if (respJson.error && respJson.error.message) {
+                                errorMsg = respJson.error.message;
+                            } else if (respJson.message) {
+                                errorMsg = respJson.message;
+                            }
+                        } catch {}
+                    }
+                    showToast(`${model}: 失败 - ${errorMsg}`, true);
+                    console.log('Test failed:', data);
                 }
             } catch (e) {
-                showToast(`测试失败`, true);
+                showToast(`测试失败: ${e.message}`, true);
             }
         }
 
@@ -924,10 +1179,16 @@
             const channelId = document.getElementById('batchTestChannelId').value;
             if (!channelId) {
                 document.getElementById('batchTestModelsContainer').innerHTML = '<div style="color:var(--text-dim);text-align:center;padding:20px;">请先选择渠道</div>';
+                document.getElementById('embeddingTestInput').style.display = 'none';
                 return;
             }
             const ch = channels.find(c => c.id === channelId);
             const models = parseModels(ch?.models);
+            // 根据渠道类型显示向量测试输入框
+            const isEmbedding = ch?.api_type === 'embedding';
+            const isRerank = ch?.api_type === 'rerank';
+            document.getElementById('embeddingTestInput').style.display = (isEmbedding || isRerank) ? 'block' : 'none';
+            document.getElementById('embeddingTestText').placeholder = isRerank ? '输入查询文本' : '输入测试文本';
             if (models.length === 0) {
                 document.getElementById('batchTestModelsContainer').innerHTML = '<div style="color:var(--text-dim);text-align:center;padding:20px;">该渠道没有发现模型，请先在渠道管理中点击"发现"</div>';
                 return;
@@ -949,6 +1210,8 @@
         async function runBatchModelTest() {
             const channelId = document.getElementById('batchTestChannelId').value;
             if (!channelId) { showToast('请选择渠道', true); return; }
+            const ch = channels.find(c => c.id === channelId);
+            const apiType = ch?.api_type || 'openai';
             const selected = Array.from(document.querySelectorAll('.test-model-cb:checked')).map(cb => cb.value);
             if (selected.length === 0) { showToast('请选择要测试的模型', true); return; }
             showToast(`开始测试 ${selected.length} 个模型...`);
@@ -958,17 +1221,31 @@
                 document.getElementById(cardId).className = 'model-card testing';
                 document.getElementById(resultId).innerHTML = '<span class="spinner"></span>测试中';
                 try {
-                    const res = await fetch(API_BASE + `/api/channels/${channelId}/test-model`, {
-                        method: 'POST', headers: authHeaders(),
-                        body: JSON.stringify({ model })
-                    });
+                    let res;
+                    // 根据渠道类型选择不同的测试API
+                    if (apiType === 'embedding') {
+                        const testText = document.getElementById('embeddingTestText').value || 'Hello, world!';
+                        res = await fetch(API_BASE + `/api/channels/${channelId}/test-embedding`, {
+                            method: 'POST', headers: authHeaders(),
+                            body: JSON.stringify({ model, input: testText })
+                        });
+                    } else {
+                        // 其他类型使用通用的 test-model 端点
+                        res = await fetch(API_BASE + `/api/channels/${channelId}/test-model`, {
+                            method: 'POST', headers: authHeaders(),
+                            body: JSON.stringify({ model })
+                        });
+                    }
                     const data = await res.json();
                     if (data.success) {
                         document.getElementById(cardId).className = 'model-card success';
-                        document.getElementById(resultId).innerHTML = `<span class="result success">✓ 成功 (${data.latency_ms}ms)</span>`;
+                        let resultText = `✓ 成功 (${data.latency_ms}ms)`;
+                        if (data.dimensions) resultText += ` [${data.dimensions}维]`;
+                        if (data.tokens) resultText += ` ${data.tokens} tokens`;
+                        document.getElementById(resultId).innerHTML = `<span class="result success">${resultText}</span>`;
                     } else {
                         document.getElementById(cardId).className = 'model-card error';
-                        document.getElementById(resultId).innerHTML = `<span class="result error">✗ ${data.error || data.response}</span>`;
+                        document.getElementById(resultId).innerHTML = `<span class="result error">✗ ${data.error || data.response || '失败'}</span>`;
                     }
                 } catch (e) {
                     document.getElementById(cardId).className = 'model-card error';
@@ -995,28 +1272,70 @@
             }
             selectedChannelModels = models;
             modelsGroup.style.display = 'block';
-            modelsContainer.innerHTML = models.map(m => `<span class="model-tag" onclick="selectModelFromChannel('${m}')" title="点击添加">${m}</span>`).join('');
+            modelsContainer.innerHTML = models.map(m => `<span class="model-tag" onclick="toggleModelSelection(this, '${m}')" data-model="${m}">${m}</span>`).join('');
+            updateSelectedModelCount();
+        }
+
+        function toggleModelSelection(el, model) {
+            el.classList.toggle('selected');
+            // 同时填入输入框（单选场景）
+            document.getElementById('entryModel').value = model;
+            updateSelectedModelCount();
+        }
+
+        function selectAllEntryModels() {
+            document.querySelectorAll('#entryChannelModels .model-tag').forEach(el => el.classList.add('selected'));
+            updateSelectedModelCount();
+        }
+
+        function clearSelectedEntryModels() {
+            document.querySelectorAll('#entryChannelModels .model-tag').forEach(el => el.classList.remove('selected'));
+            updateSelectedModelCount();
+        }
+
+        function updateSelectedModelCount() {
+            const count = document.querySelectorAll('#entryChannelModels .model-tag.selected').length;
+            document.getElementById('selectedModelCount').textContent = count > 0 ? `已选择 ${count} 个模型` : '';
+        }
+
+        function getSelectedModels() {
+            return Array.from(document.querySelectorAll('#entryChannelModels .model-tag.selected')).map(el => el.dataset.model);
         }
 
         function selectModelFromChannel(model) {
+            // 兼容旧调用
             document.getElementById('entryModel').value = model;
         }
 
-        function addAllModelsAsRoutes() {
+        async function addSelectedModelsAsRoutes() {
             const channelId = document.getElementById('entryChannelId').value;
-            if (!channelId || selectedChannelModels.length === 0) return;
+            const selectedModels = getSelectedModels();
+            if (!channelId || selectedModels.length === 0) {
+                showToast('请选择要添加的模型', true);
+                return;
+            }
             const weight = parseInt(document.getElementById('entryWeight').value) || 1;
             const priority = parseInt(document.getElementById('entryPriority').value) || 0;
-            Promise.all(selectedChannelModels.map(model =>
-                fetch(API_BASE + '/api/entries', {
-                    method: 'POST', headers: authHeaders(),
-                    body: JSON.stringify({ model, channel_id: channelId, weight, priority })
-                })
-            )).then(() => {
+            showToast(`正在添加 ${selectedModels.length} 个路由...`);
+            try {
+                await Promise.all(selectedModels.map(model =>
+                    fetch(API_BASE + '/api/entries', {
+                        method: 'POST', headers: authHeaders(),
+                        body: JSON.stringify({ model, channel_id: channelId, weight, priority })
+                    })
+                ));
                 closeModal('entryModal');
                 loadEntries();
-                showToast(`已添加 ${selectedChannelModels.length} 个路由`);
-            }).catch(() => showToast('批量添加失败', true));
+                showToast(`已添加 ${selectedModels.length} 个路由`);
+            } catch (e) {
+                showToast('批量添加失败', true);
+            }
+        }
+
+        function addAllModelsAsRoutes() {
+            // 全选后添加
+            selectAllEntryModels();
+            addSelectedModelsAsRoutes();
         }
 
         function openEntryModal(entry = null) {
@@ -1024,7 +1343,11 @@
             const select = document.getElementById('entryChannelId');
             select.innerHTML = channels.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
             document.getElementById('entryModelsGroup').style.display = 'none';
+            document.getElementById('entryTagMatch').style.display = 'none';
+            document.getElementById('entryModelSuggest').style.display = 'none';
             selectedChannelModels = [];
+            // 设置编辑模式标记
+            document.getElementById('entryId').value = entry?.id || '';
             if (entry) {
                 document.getElementById('entryModalTitle').textContent = '编辑路由';
                 document.getElementById('entryModel').value = entry.model;
@@ -1033,6 +1356,7 @@
                 document.getElementById('entryWeight').value = entry.weight || 1;
                 document.getElementById('entryPriority').value = entry.priority || 0;
                 onEntryChannelChange();
+                onEntryModelInput(); // 触发标签匹配
             } else {
                 document.getElementById('entryModalTitle').textContent = '添加路由';
                 document.getElementById('entryModel').value = '';
@@ -1043,23 +1367,99 @@
             document.getElementById('entryModal').classList.add('active');
         }
 
+        // 模型输入时匹配标签
+        function onEntryModelInput() {
+            const model = document.getElementById('entryModel').value.trim();
+            if (!model) {
+                document.getElementById('entryTagMatch').style.display = 'none';
+                document.getElementById('entryModelSuggest').style.display = 'none';
+                return;
+            }
+
+            // 查找匹配的标签
+            const tag = modelTagsCache.find(t => t.model === model || model.startsWith(t.model) || t.model.startsWith(model));
+            const typeColors = { chat: '#3b82f6', embedding: '#8b5cf6', rerank: '#f59e0b', tts: '#ec4899', whisper: '#ec4899', vision: '#10b981', image: '#10b981' };
+            const typeNames = { chat: '对话', embedding: '向量', rerank: '重排', tts: 'TTS', whisper: '语音', vision: '视觉', image: '图像' };
+
+            if (tag) {
+                document.getElementById('entryTagMatch').style.display = 'block';
+                document.getElementById('entryTagInfo').innerHTML = `
+                    <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;">
+                        <span><strong>类型:</strong> <span style="color:${typeColors[tag.model_type] || '#64748b'}">${typeNames[tag.model_type] || tag.model_type}</span></span>
+                        <span><strong>上下文:</strong> ${tag.context_window ? tag.context_window.toLocaleString() : '-'}</span>
+                        <span><strong>最大输出:</strong> ${tag.max_output ? tag.max_output.toLocaleString() : '-'}</span>
+                        <span><strong>提供商:</strong> ${tag.provider || '-'}</span>
+                    </div>
+                    <div style="margin-top:4px;color:var(--text-dim)">${tag.description || ''}</div>
+                `;
+            } else {
+                document.getElementById('entryTagMatch').style.display = 'block';
+                document.getElementById('entryTagInfo').innerHTML = `<span style="color:var(--text-dim)">未匹配到标签，测试时将自动判断类型</span>`;
+            }
+
+            // 模型建议
+            const suggestions = modelTagsCache.filter(t => t.model.toLowerCase().includes(model.toLowerCase())).slice(0, 5);
+            if (suggestions.length > 0 && suggestions[0].model !== model) {
+                const suggestSelect = document.getElementById('entryModelSuggest');
+                suggestSelect.innerHTML = suggestions.map(t => `<option value="${t.model}">${t.model} (${typeNames[t.model_type] || t.model_type})</option>`).join('');
+                suggestSelect.style.display = 'block';
+            } else {
+                document.getElementById('entryModelSuggest').style.display = 'none';
+            }
+        }
+
+        function selectSuggestedModel() {
+            const model = document.getElementById('entryModelSuggest').value;
+            if (model) {
+                document.getElementById('entryModel').value = model;
+                onEntryModelInput();
+            }
+        }
+
+        function openAddTagForEntry() {
+            // 关闭当前弹窗，打开模型标签弹窗
+            const model = document.getElementById('entryModel').value;
+            closeModal('entryModal');
+            openModelTagModal();
+            document.getElementById('tagModel').value = model;
+        }
+
         async function saveEntry() {
+            const entryId = document.getElementById('entryId').value;
             const model = document.getElementById('entryModel').value;
             const channel_id = document.getElementById('entryChannelId').value;
             const display_name = document.getElementById('entryDisplayName').value;
+            const weight = parseInt(document.getElementById('entryWeight').value) || 1;
+            const priority = parseInt(document.getElementById('entryPriority').value) || 0;
             if (!model || !channel_id) { showToast('请填写完整信息', true); return; }
             try {
-                const res = await fetch(API_BASE + '/api/entries', {
-                    method: 'POST', headers: authHeaders(),
-                    body: JSON.stringify({
-                        model, channel_id,
-                        display_name: display_name || null,
-                        weight: parseInt(document.getElementById('entryWeight').value) || 1,
-                        priority: parseInt(document.getElementById('entryPriority').value) || 0
-                    })
-                });
-                if (res.ok) { closeModal('entryModal'); loadEntries(); showToast('路由已添加'); }
-                else { const err = await res.json(); showToast(err.error || '添加失败', true); }
+                let res;
+                if (entryId) {
+                    // 编辑模式 - PUT
+                    res = await fetch(API_BASE + `/api/entries/${entryId}`, {
+                        method: 'PUT', headers: authHeaders(),
+                        body: JSON.stringify({
+                            model,
+                            channel_id,
+                            display_name: display_name || null,
+                            weight,
+                            priority
+                        })
+                    });
+                } else {
+                    // 创建模式 - POST
+                    res = await fetch(API_BASE + '/api/entries', {
+                        method: 'POST', headers: authHeaders(),
+                        body: JSON.stringify({
+                            model, channel_id,
+                            display_name: display_name || null,
+                            weight,
+                            priority
+                        })
+                    });
+                }
+                if (res.ok) { closeModal('entryModal'); loadEntries(); showToast(entryId ? '路由已更新' : '路由已添加'); }
+                else { const err = await res.json(); showToast(err.error || '操作失败', true); }
             } catch (e) { showToast('网络错误', true); }
         }
 
@@ -1185,6 +1585,152 @@
             const toast = document.getElementById('toast');
             toast.textContent = msg; toast.className = 'toast show ' + (isError ? 'error' : 'success');
             setTimeout(() => toast.classList.remove('show'), 3000);
+        }
+
+        // ==================== 模型标签管理 ====================
+
+        async function loadModelTags() {
+            try {
+                const tags = await fetch(API_BASE + '/api/model-tags', { headers: authHeaders() }).then(r => r.json());
+                // 合并 localStorage 中的自定义标签
+                const customTags = JSON.parse(localStorage.getItem('customModelTags') || '[]');
+                // 自定义标签放在前面
+                modelTagsCache = [...customTags, ...tags];
+                renderModelTags(modelTagsCache);
+                updateTagCounts(modelTagsCache);
+            } catch (e) { console.error(e); }
+        }
+
+        function updateTagCounts(tags) {
+            const counts = { chat: 0, embedding: 0, rerank: 0, tts: 0, whisper: 0, vision: 0, image: 0 };
+            tags.forEach(t => counts[t.model_type] = (counts[t.model_type] || 0) + 1);
+            document.getElementById('tagCountChat').textContent = counts.chat || 0;
+            document.getElementById('tagCountEmbedding').textContent = counts.embedding || 0;
+            document.getElementById('tagCountRerank').textContent = counts.rerank || 0;
+            document.getElementById('tagCountAudio').textContent = (counts.tts || 0) + (counts.whisper || 0);
+            document.getElementById('tagCountVision').textContent = (counts.vision || 0) + (counts.image || 0);
+        }
+
+        function renderModelTags(tags) {
+            const typeColors = {
+                chat: '#3b82f6',
+                embedding: '#8b5cf6',
+                rerank: '#f59e0b',
+                tts: '#ec4899',
+                whisper: '#ec4899',
+                vision: '#10b981',
+                image: '#10b981'
+            };
+            const typeNames = {
+                chat: '对话',
+                embedding: '向量',
+                rerank: '重排',
+                tts: '语音合成',
+                whisper: '语音识别',
+                vision: '视觉',
+                image: '图像'
+            };
+            document.getElementById('modelTagsTable').innerHTML = tags.length ? tags.map(t => {
+                const isCustom = t.is_custom;
+                return `<tr>
+                    <td>
+                        <strong>${t.model}</strong>
+                        ${isCustom ? '<span style="margin-left:6px;font-size:10px;color:var(--accent);">自定义</span>' : ''}
+                    </td>
+                    <td><span class="status-badge" style="background:${typeColors[t.model_type] || '#64748b'}20;color:${typeColors[t.model_type] || '#64748b'}">${typeNames[t.model_type] || t.model_type}</span></td>
+                    <td>${t.context_window ? t.context_window.toLocaleString() : '-'}</td>
+                    <td>${t.max_output ? t.max_output.toLocaleString() : '-'}</td>
+                    <td>${t.provider || '-'}</td>
+                    <td style="color:var(--text-dim)">${t.description || '-'}</td>
+                    <td>${isCustom ? `<button class="btn btn-danger btn-sm" onclick="deleteCustomTag('${t.model}')">删除</button>` : ''}</td>
+                </tr>`;
+            }).join('') : '<tr><td colspan="7" style="text-align:center;padding:40px;">暂无模型标签</td></tr>';
+        }
+
+        function filterModelTags() {
+            const search = document.getElementById('tagSearchInput').value.toLowerCase();
+            const filtered = modelTagsCache.filter(t =>
+                t.model.toLowerCase().includes(search) ||
+                (t.provider || '').toLowerCase().includes(search) ||
+                (t.description || '').toLowerCase().includes(search)
+            );
+            renderModelTags(filtered);
+        }
+
+        function openModelTagModal() {
+            document.getElementById('modelTagModalTitle').textContent = '添加模型标签';
+            document.getElementById('tagModel').value = '';
+            document.getElementById('tagModelType').value = 'chat';
+            document.getElementById('tagContextWindow').value = '';
+            document.getElementById('tagMaxOutput').value = '';
+            document.getElementById('tagProvider').value = '';
+            document.getElementById('tagDescription').value = '';
+            document.getElementById('modelTagModal').classList.add('active');
+        }
+
+        async function saveModelTag() {
+            const model = document.getElementById('tagModel').value.trim();
+            const model_type = document.getElementById('tagModelType').value;
+            if (!model) { showToast('请输入模型名称', true); return; }
+
+            // 检查是否已存在
+            if (modelTagsCache.some(t => t.model === model)) {
+                showToast('该模型标签已存在', true);
+                return;
+            }
+
+            const newTag = {
+                model,
+                model_type,
+                context_window: parseInt(document.getElementById('tagContextWindow').value) || 4096,
+                max_output: parseInt(document.getElementById('tagMaxOutput').value) || 4096,
+                provider: document.getElementById('tagProvider').value || 'Custom',
+                description: document.getElementById('tagDescription').value || '',
+                is_custom: true  // 标记为自定义标签
+            };
+
+            // 保存到 localStorage
+            const customTags = JSON.parse(localStorage.getItem('customModelTags') || '[]');
+            customTags.push(newTag);
+            localStorage.setItem('customModelTags', JSON.stringify(customTags));
+
+            // 添加到缓存并重新渲染
+            modelTagsCache.unshift(newTag);
+            renderModelTags(modelTagsCache);
+            updateTagCounts(modelTagsCache);
+            closeModal('modelTagModal');
+            showToast(`已添加模型标签: ${model}`);
+        }
+
+        // 删除自定义标签
+        function deleteCustomTag(model) {
+            if (!confirm(`确定删除标签 "${model}"？`)) return;
+
+            // 从 localStorage 删除
+            let customTags = JSON.parse(localStorage.getItem('customModelTags') || '[]');
+            customTags = customTags.filter(t => t.model !== model);
+            localStorage.setItem('customModelTags', JSON.stringify(customTags));
+
+            // 从缓存删除并重新渲染
+            modelTagsCache = modelTagsCache.filter(t => t.model !== model);
+            renderModelTags(modelTagsCache);
+            updateTagCounts(modelTagsCache);
+            showToast(`已删除标签: ${model}`);
+        }
+
+        // 查询模型标签（用于测试时显示信息）
+        async function queryModelTagInfo(model) {
+            // 先从本地缓存查找
+            const localTag = modelTagsCache.find(t => t.model === model || model.startsWith(t.model) || t.model.startsWith(model));
+            if (localTag) return localTag;
+
+            try {
+                const res = await fetch(API_BASE + `/api/model-tags/query?model=${encodeURIComponent(model)}`, { headers: authHeaders() });
+                if (res.ok) {
+                    return await res.json();
+                }
+            } catch (e) {}
+            return null;
         }
     </script>
 </body>
