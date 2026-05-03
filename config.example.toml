@@ -1,0 +1,50 @@
+# API Switch Configuration Example
+# Copy this file to config.toml and modify as needed
+
+[server]
+# Server host and port
+host = "0.0.0.0"
+port = 9091
+
+# Database configuration
+[database]
+# SQLite database path
+path = "./data/api-switch.db"
+
+# Enable WAL mode for better concurrency
+wal_mode = true
+
+# Logging configuration
+[logging]
+# Log level: trace, debug, info, warn, error
+level = "info"
+
+# Circuit breaker configuration
+[circuit_breaker]
+# Number of failures before circuit opens
+failure_threshold = 5
+
+# Recovery timeout in seconds
+recovery_timeout = 300
+
+# Example channel configuration
+# [[channels]]
+# name = "OpenAI"
+# api_type = "openai"
+# base_url = "https://api.openai.com/v1"
+# api_key = "sk-your-openai-key"
+# enabled = true
+
+# [[channels]]
+# name = "Claude"
+# api_type = "claude"
+# base_url = "https://api.anthropic.com/v1"
+# api_key = "sk-ant-your-claude-key"
+# enabled = true
+
+# [[channels]]
+# name = "Gemini"
+# api_type = "gemini"
+# base_url = "https://generativelanguage.googleapis.com/v1"
+# api_key = "your-gemini-key"
+# enabled = true

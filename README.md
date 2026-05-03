@@ -1,124 +1,214 @@
 # API Switch
 
-一个基于 Rust 的 API 代理管理平台，支持多渠道管理、模型路由、熔断机制和 Token 统计。
+<p align="center">
+  <strong>A high-performance LLM API gateway written in Rust</strong>
+</p>
 
-## 功能特性
+<p align="center">
+  Multi-provider support • Load balancing • Circuit breaker • Token tracking
+</p>
 
-- **多渠道管理**: 支持 OpenAI、Claude、Gemini、Azure 等多种 API 类型
-- **模型路由**: 支持按模型名称路由到不同渠道
-- **模型发现**: 自动发现渠道支持的模型列表
-- **权重配置**: 支持渠道权重和模型权重配置
-- **熔断机制**: 模型级别的熔断保护，支持自动恢复
-- **Token 统计**: 实时统计 Token 使用量
-- **API Keys**: 支持多 API Key 管理
-- **请求日志**: 完整的请求日志记录
+<p align="center">
+  <a href="#features">Features</a> •
+  <a href="#quick-start">Quick Start</a> •
+  <a href="#api-documentation">API Docs</a> •
+  <a href="#deployment">Deployment</a>
+</p>
 
-## 快速开始
+---
 
-### Docker 部署
+## Features
+
+- **Multi-Provider Support** - OpenAI, Claude, Gemini, Azure, and any OpenAI-compatible endpoint
+- **Load Balancing** - Priority-based routing with automatic failover
+- **Circuit Breaker** - Model-level fault tolerance with auto-recovery
+- **Token Tracking** - Real-time usage statistics and cost monitoring
+- **Auto Discovery** - Automatically discover available models from providers
+- **Web Console** - Built-in admin dashboard for easy management
+- **Single Binary** - No dependencies, just download and run
+- **Docker Ready** - Official Docker image for easy deployment
+
+## Quick Start
+
+### Option 1: Docker (Recommended)
 
 ```bash
-# 构建镜像
-docker build -t api-switch .
-
-# 运行容器
 docker run -d --name api-switch \
-  --restart unless-stopped \
   -p 9091:9091 \
-  -v /path/to/data:/app/data \
-  -e DATABASE_PATH=/app/data/api-switch.db \
-  -e PORT=9091 \
-  api-switch
+  -v api-switch-data:/app/data \
+  simer11/api-switch:latest
 ```
 
-### 从源码构建
+Open http://localhost:9091 and login with `admin` / `admin`.
+
+### Option 2: Binary
 
 ```bash
-# 安装 Rust
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-
-# 安装 musl 工具链 (用于 Alpine)
-rustup target add x86_64-unknown-linux-musl
-
-# 构建
-cargo build --release --target x86_64-unknown-linux-musl
-
-# 运行
-./target/x86_64-unknown-linux-musl/release/api-switch
+# Download from releases
+curl -L https://github.com/simer11-jing/api-switch/releases/latest/download/api-switch-linux-amd64 -o api-switch
+chmod +x api-switch
+./api-switch
 ```
 
-## API 文档
-
-### 认证
+### Option 3: Build from Source
 
 ```bash
-# 登录
-POST /api/login
-{"username": "admin", "password": "admin"}
+git clone https://github.com/simer11-jing/api-switch.git
+cd api-switch
+cargo build --release
+./target/release/api-switch
 ```
 
-### 渠道管理
+## Usage
+
+### 1. Add a Channel
 
 ```bash
-# 获取渠道列表
-GET /api/channels
-
-# 创建渠道
-POST /api/channels
-{"name": "OpenAI", "api_type": "openai", "base_url": "https://api.openai.com/v1", "api_key": "sk-..."}
-
-# 测试渠道连通性
-POST /api/channels/{id}/test
-
-# 发现模型
-POST /api/channels/{id}/discover
-
-# 测试单个模型
-POST /api/channels/{id}/test-model
-{"model": "gpt-4"}
+curl -X POST http://localhost:9091/api/channels \
+  -H "Content-Type: application/json" \
+  -H "Cookie: session=your-session" \
+  -d '{
+    "name": "OpenAI",
+    "api_type": "openai",
+    "base_url": "https://api.openai.com/v1",
+    "api_key": "sk-your-key"
+  }'
 ```
 
-### 模型路由
+### 2. Discover Models
 
 ```bash
-# 获取路由列表
-GET /api/entries
-
-# 创建路由
-POST /api/entries
-{"model": "gpt-4", "channel_id": "...", "display_name": "GPT-4", "weight": 1, "priority": 0}
+curl -X POST http://localhost:9091/api/channels/{id}/discover
 ```
 
-### 代理接口
+### 3. Create API Key
 
 ```bash
-# Chat Completions
-POST /v1/chat/completions
-Authorization: Bearer your-api-key
+curl -X POST http://localhost:9091/api/keys \
+  -H "Content-Type: application/json" \
+  -d '{"name": "my-key"}'
 ```
 
-## 配置说明
+### 4. Use the Proxy
 
-### 环境变量
+```bash
+curl http://localhost:9091/v1/chat/completions \
+  -H "Authorization: Bearer your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-4",
+    "messages": [{"role": "user", "content": "Hello!"}]
+  }'
+```
 
-| 变量 | 说明 | 默认值 |
-|------|------|--------|
-| DATABASE_PATH | 数据库路径 | /app/data/api-switch.db |
-| PORT | 服务端口 | 9091 |
-| RUST_LOG | 日志级别 | info |
+## API Documentation
 
-### 熔断配置
+### Authentication
 
-- **熔断阈值**: 连续失败次数达到阈值后触发熔断
-- **恢复时间**: 熔断后等待时间自动恢复
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/login` | POST | Login with username/password |
+| `/api/logout` | POST | Logout current session |
+| `/api/me` | GET | Get current user info |
 
-## 界面预览
+### Channels
 
-访问 http://localhost:9091 使用默认账号登录:
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/channels` | GET | List all channels |
+| `/api/channels` | POST | Create a channel |
+| `/api/channels/{id}` | GET/PUT/DELETE | Channel CRUD |
+| `/api/channels/{id}/test` | POST | Test connectivity |
+| `/api/channels/{id}/discover` | POST | Discover models |
 
-- 用户名: admin
-- 密码: admin
+### Routing
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/entries` | GET/POST | List/create route entries |
+| `/api/entries/{id}` | PUT/DELETE | Update/delete entry |
+| `/api/entries/reorder` | POST | Reorder priorities |
+
+### Proxy
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/v1/chat/completions` | POST | Chat completions (OpenAI compatible) |
+| `/v1/models` | GET | List available models |
+
+## Deployment
+
+### Docker Compose
+
+```yaml
+version: '3.8'
+services:
+  api-switch:
+    image: simer11/api-switch:latest
+    ports:
+      - "9091:9091"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - RUST_LOG=info
+      - DATABASE_PATH=/app/data/api-switch.db
+    restart: unless-stopped
+```
+
+### Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PORT` | 9091 | Server port |
+| `DATABASE_PATH` | /app/data/api-switch.db | SQLite database path |
+| `RUST_LOG` | info | Log level |
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────┐
+│                    API Switch                        │
+├─────────────────────────────────────────────────────┤
+│  ┌─────────┐  ┌─────────┐  ┌─────────┐            │
+│  │ OpenAI  │  │ Claude  │  │ Gemini  │  ...       │
+│  └────┬────┘  └────┬────┘  └────┬────┘            │
+│       │            │            │                  │
+│       └────────────┴────────────┘                  │
+│                    │                                │
+│              ┌─────┴─────┐                         │
+│              │   Router  │  ← Priority-based       │
+│              └─────┬─────┘                         │
+│                    │                                │
+│         ┌──────────┼──────────┐                    │
+│         │          │          │                    │
+│    ┌────┴────┐ ┌───┴───┐ ┌───┴───┐                │
+│    │ Circuit │ │ Token │ │ Logging│                │
+│    │ Breaker │ │ Stats │ │        │                │
+│    └─────────┘ └───────┘ └───────┘                │
+│                    │                                │
+│              ┌─────┴─────┐                         │
+│              │  /v1/...  │  ← OpenAI compatible    │
+│              └───────────┘                         │
+└─────────────────────────────────────────────────────┘
+```
+
+## Roadmap
+
+- [ ] OpenAPI documentation (Swagger UI)
+- [ ] Prometheus metrics endpoint
+- [ ] Multi-tenant support
+- [ ] Rate limiting per API key
+- [ ] Webhook notifications
+- [ ] Kubernetes Helm chart
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ## License
 
-MIT
+MIT License - see [LICENSE](LICENSE) for details.
+
+## Acknowledgments
+
+Inspired by [LiteLLM](https://github.com/BerriAI/litellm) and [gproxy](https://github.com/LeenHawk/gproxy).

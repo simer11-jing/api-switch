@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  api-switch:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: simer11/api-switch:latest
+    container_name: api-switch
+    restart: unless-stopped
+    ports:
+      - "${PORT:-9091}:9091"
+    volumes:
+      - api-switch-data:/app/data
+    environment:
+      - RUST_LOG=${RUST_LOG:-info}
+      - DATABASE_PATH=/app/data/api-switch.db
+      - PORT=9091
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9091/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+
+volumes:
+  api-switch-data:
+    driver: local
