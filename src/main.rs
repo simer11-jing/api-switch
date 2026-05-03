@@ -4,11 +4,11 @@ use tokio::sync::RwLock;
 use tower_http::cors::CorsLayer;
 use tower_http::services::ServeDir;
 
-mod db;
 mod auth;
-mod models;
-mod handlers;
 mod circuit_breaker;
+mod db;
+mod handlers;
+mod models;
 
 pub type SharedState = Arc<RwLock<AppState>>;
 
@@ -33,18 +33,16 @@ async fn main() {
 
     let redis_client = if let Some(url) = redis_url {
         match redis::Client::open(url.as_str()) {
-            Ok(client) => {
-                match client.get_multiplexed_async_connection().await {
-                    Ok(_) => {
-                        tracing::info!("Redis connected");
-                        Some(client)
-                    }
-                    Err(e) => {
-                        tracing::warn!("Redis unavailable: {}", e);
-                        None
-                    }
+            Ok(client) => match client.get_multiplexed_async_connection().await {
+                Ok(_) => {
+                    tracing::info!("Redis connected");
+                    Some(client)
                 }
-            }
+                Err(e) => {
+                    tracing::warn!("Redis unavailable: {}", e);
+                    None
+                }
+            },
             Err(_) => None,
         }
     } else {
@@ -73,7 +71,9 @@ async fn main() {
         .layer(CorsLayer::permissive())
         .with_state(state);
 
-    let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", port)).await.unwrap();
+    let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", port))
+        .await
+        .unwrap();
     tracing::info!("API Switch running on port {}", port);
     axum::serve(listener, app).await.unwrap();
 }

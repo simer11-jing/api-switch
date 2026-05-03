@@ -1,5 +1,5 @@
-use rusqlite::{params, Connection};
 use crate::models::*;
+use rusqlite::{params, Connection};
 use std::sync::Mutex;
 
 pub struct Database {
@@ -13,7 +13,9 @@ impl Database {
         }
         let conn = Connection::open(path)?;
         conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;")?;
-        let db = Self { conn: Mutex::new(conn) };
+        let db = Self {
+            conn: Mutex::new(conn),
+        };
         db.init_tables()?;
         db.seed_defaults()?;
         Ok(db)
@@ -21,7 +23,8 @@ impl Database {
 
     fn init_tables(&self) -> Result<(), rusqlite::Error> {
         let conn = self.conn.lock().unwrap();
-        conn.execute_batch("
+        conn.execute_batch(
+            "
             CREATE TABLE IF NOT EXISTS users (
                 id TEXT PRIMARY KEY,
                 username TEXT UNIQUE NOT NULL,
@@ -106,7 +109,8 @@ impl Database {
                 FOREIGN KEY (channel_id) REFERENCES channels(id),
                 UNIQUE(channel_id, model)
             );
-        ")?;
+        ",
+        )?;
         Ok(())
     }
 
@@ -130,7 +134,11 @@ impl Database {
         Ok(())
     }
 
-    pub fn login(&self, username: &str, password: &str) -> Result<Option<(String, String)>, rusqlite::Error> {
+    pub fn login(
+        &self,
+        username: &str,
+        password: &str,
+    ) -> Result<Option<(String, String)>, rusqlite::Error> {
         let conn = self.conn.lock().unwrap();
         let hash = crate::auth::hash_password(password);
         let result = conn.query_row(
@@ -145,7 +153,12 @@ impl Database {
         }
     }
 
-    pub fn change_password(&self, username: &str, old_password: &str, new_password: &str) -> Result<bool, rusqlite::Error> {
+    pub fn change_password(
+        &self,
+        username: &str,
+        old_password: &str,
+        new_password: &str,
+    ) -> Result<bool, rusqlite::Error> {
         let conn = self.conn.lock().unwrap();
         let old_hash = crate::auth::hash_password(old_password);
         let count: i64 = conn.query_row(
@@ -153,7 +166,9 @@ impl Database {
             params![username, old_hash],
             |r| r.get(0),
         )?;
-        if count == 0 { return Ok(false); }
+        if count == 0 {
+            return Ok(false);
+        }
         let new_hash = crate::auth::hash_password(new_password);
         conn.execute(
             "UPDATE users SET password_hash = ?1 WHERE username = ?2",
@@ -162,7 +177,12 @@ impl Database {
         Ok(true)
     }
 
-    pub fn store_session(&self, token: &str, username: &str, expires_at: &str) -> Result<(), rusqlite::Error> {
+    pub fn store_session(
+        &self,
+        token: &str,
+        username: &str,
+        expires_at: &str,
+    ) -> Result<(), rusqlite::Error> {
         let conn = self.conn.lock().unwrap();
         conn.execute(
             "INSERT OR REPLACE INTO sessions (token, username, expires_at) VALUES (?1, ?2, ?3)",
@@ -231,11 +251,13 @@ impl Database {
             "INSERT INTO entries (id, channel_id, model, display_name, enabled, priority, sort_index, weight, created_at) VALUES (?1, ?2, ?3, ?4, 1, ?5, ?6, 1, ?7)",
             params![id, req.channel_id, req.model, req.display_name, priority, sort_index, now],
         )?;
-        let channel_name: Option<String> = conn.query_row(
-            "SELECT name FROM channels WHERE id = ?1",
-            params![req.channel_id],
-            |r| r.get(0),
-        ).ok();
+        let channel_name: Option<String> = conn
+            .query_row(
+                "SELECT name FROM channels WHERE id = ?1",
+                params![req.channel_id],
+                |r| r.get(0),
+            )
+            .ok();
         Ok(ApiEntry {
             id,
             channel_id: req.channel_id.clone(),
@@ -267,7 +289,11 @@ impl Database {
         Ok(affected > 0)
     }
 
-    pub fn update_entry(&self, id: &str, req: &UpdateEntry) -> Result<Option<ApiEntry>, rusqlite::Error> {
+    pub fn update_entry(
+        &self,
+        id: &str,
+        req: &UpdateEntry,
+    ) -> Result<Option<ApiEntry>, rusqlite::Error> {
         let conn = self.conn.lock().unwrap();
         let existing = conn.query_row(
             "SELECT id, channel_id, model, display_name, enabled, priority, sort_index, weight, response_ms, cooldown_until, created_at FROM entries WHERE id = ?1",
@@ -292,20 +318,32 @@ impl Database {
             Err(rusqlite::Error::QueryReturnedNoRows) => return Ok(None),
             Err(e) => return Err(e),
         };
-        if let Some(v) = &req.channel_id { entry.channel_id = v.clone(); }
-        if let Some(v) = &req.model { entry.model = v.clone(); }
-        if let Some(v) = &req.display_name { entry.display_name = Some(v.clone()); }
-        if let Some(v) = req.priority { entry.priority = v; }
-        if let Some(v) = req.weight { entry.weight = v; }
+        if let Some(v) = &req.channel_id {
+            entry.channel_id = v.clone();
+        }
+        if let Some(v) = &req.model {
+            entry.model = v.clone();
+        }
+        if let Some(v) = &req.display_name {
+            entry.display_name = Some(v.clone());
+        }
+        if let Some(v) = req.priority {
+            entry.priority = v;
+        }
+        if let Some(v) = req.weight {
+            entry.weight = v;
+        }
         conn.execute(
             "UPDATE entries SET channel_id = ?1, model = ?2, display_name = ?3, priority = ?4, weight = ?5 WHERE id = ?6",
             params![entry.channel_id, entry.model, entry.display_name, entry.priority, entry.weight, id],
         )?;
-        let channel_name: Option<String> = conn.query_row(
-            "SELECT name FROM channels WHERE id = ?1",
-            params![entry.channel_id],
-            |r| r.get(0),
-        ).ok();
+        let channel_name: Option<String> = conn
+            .query_row(
+                "SELECT name FROM channels WHERE id = ?1",
+                params![entry.channel_id],
+                |r| r.get(0),
+            )
+            .ok();
         entry.channel_name = channel_name;
         Ok(Some(entry))
     }
@@ -393,7 +431,11 @@ impl Database {
         })
     }
 
-    pub fn update_channel(&self, id: &str, req: &UpdateChannel) -> Result<Option<Channel>, rusqlite::Error> {
+    pub fn update_channel(
+        &self,
+        id: &str,
+        req: &UpdateChannel,
+    ) -> Result<Option<Channel>, rusqlite::Error> {
         let conn = self.conn.lock().unwrap();
         let existing = conn.query_row(
             "SELECT id, name, api_type, base_url, api_key, models, enabled, priority, weight, created_at, updated_at FROM channels WHERE id = ?1",
@@ -417,14 +459,30 @@ impl Database {
             Err(rusqlite::Error::QueryReturnedNoRows) => return Ok(None),
             Err(e) => return Err(e),
         };
-        if let Some(v) = &req.name { ch.name = v.clone(); }
-        if let Some(v) = &req.api_type { ch.api_type = v.clone(); }
-        if let Some(v) = &req.base_url { ch.base_url = v.clone(); }
-        if let Some(v) = &req.api_key { ch.api_key = v.clone(); }
-        if let Some(v) = &req.models { ch.models = v.clone(); }
-        if let Some(v) = req.enabled { ch.enabled = v; }
-        if let Some(v) = req.priority { ch.priority = v; }
-        if let Some(v) = req.weight { ch.weight = v; }
+        if let Some(v) = &req.name {
+            ch.name = v.clone();
+        }
+        if let Some(v) = &req.api_type {
+            ch.api_type = v.clone();
+        }
+        if let Some(v) = &req.base_url {
+            ch.base_url = v.clone();
+        }
+        if let Some(v) = &req.api_key {
+            ch.api_key = v.clone();
+        }
+        if let Some(v) = &req.models {
+            ch.models = v.clone();
+        }
+        if let Some(v) = req.enabled {
+            ch.enabled = v;
+        }
+        if let Some(v) = req.priority {
+            ch.priority = v;
+        }
+        if let Some(v) = req.weight {
+            ch.weight = v;
+        }
         ch.updated_at = chrono::Utc::now().to_rfc3339();
         conn.execute(
             "UPDATE channels SET name = ?1, api_type = ?2, base_url = ?3, api_key = ?4, models = ?5, enabled = ?6, priority = ?7, weight = ?8, updated_at = ?9 WHERE id = ?10",
@@ -450,7 +508,11 @@ impl Database {
         Ok(affected > 0)
     }
 
-    pub fn update_channel_models(&self, id: &str, models: &[String]) -> Result<(), rusqlite::Error> {
+    pub fn update_channel_models(
+        &self,
+        id: &str,
+        models: &[String],
+    ) -> Result<(), rusqlite::Error> {
         let conn = self.conn.lock().unwrap();
         let models_json = serde_json::to_string(models).unwrap_or_default();
         let now = chrono::Utc::now().to_rfc3339();
@@ -546,18 +608,27 @@ impl Database {
         Ok(())
     }
 
-    pub fn list_logs(&self, limit: i64, offset: i64, channel_id: Option<&str>, model: Option<&str>, status: Option<i32>) -> Result<(Vec<RequestLog>, i64), rusqlite::Error> {
+    pub fn list_logs(
+        &self,
+        limit: i64,
+        offset: i64,
+        channel_id: Option<&str>,
+        model: Option<&str>,
+        status: Option<i32>,
+    ) -> Result<(Vec<RequestLog>, i64), rusqlite::Error> {
         let conn = self.conn.lock().unwrap();
-        let total: i64 = conn.query_row(
-            "SELECT COUNT(*) FROM logs",
-            [],
-            |r| r.get(0),
-        )?;
+        let total: i64 = conn.query_row("SELECT COUNT(*) FROM logs", [], |r| r.get(0))?;
         let mut sql = "SELECT id, channel_id, channel_name, model, api_key_id, request_type, status_code, latency_ms, prompt_tokens, completion_tokens, error, created_at FROM logs".to_string();
         let mut conditions = Vec::new();
-        if channel_id.is_some() { conditions.push("channel_id = ?1"); }
-        if model.is_some() { conditions.push("model LIKE ?2"); }
-        if status.is_some() { conditions.push("status_code >= ?3"); }
+        if channel_id.is_some() {
+            conditions.push("channel_id = ?1");
+        }
+        if model.is_some() {
+            conditions.push("model LIKE ?2");
+        }
+        if status.is_some() {
+            conditions.push("status_code >= ?3");
+        }
         if !conditions.is_empty() {
             sql.push_str(" WHERE ");
             sql.push_str(&conditions.join(" AND "));
@@ -567,7 +638,13 @@ impl Database {
         let channel_id_val = channel_id.map(|s| s.to_string());
         let model_val = model.map(|s| format!("%{}%", s));
         let rows = stmt.query_map(
-            params![channel_id_val, model_val, status.unwrap_or(0), limit, offset],
+            params![
+                channel_id_val,
+                model_val,
+                status.unwrap_or(0),
+                limit,
+                offset
+            ],
             |row| {
                 Ok(RequestLog {
                     id: row.get(0)?,
@@ -592,15 +669,28 @@ impl Database {
     pub fn get_log_stats(&self) -> Result<LogStats, rusqlite::Error> {
         let conn = self.conn.lock().unwrap();
         let total: i64 = conn.query_row("SELECT COUNT(*) FROM logs", [], |r| r.get(0))?;
-        let success: i64 = conn.query_row("SELECT COUNT(*) FROM logs WHERE status_code >= 200 AND status_code < 300", [], |r| r.get(0))?;
-        let errors: i64 = conn.query_row("SELECT COUNT(*) FROM logs WHERE status_code >= 400 OR status_code = 0", [], |r| r.get(0))?;
+        let success: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM logs WHERE status_code >= 200 AND status_code < 300",
+            [],
+            |r| r.get(0),
+        )?;
+        let errors: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM logs WHERE status_code >= 400 OR status_code = 0",
+            [],
+            |r| r.get(0),
+        )?;
         let today_start = chrono::Utc::now().format("%Y-%m-%d").to_string();
         let today: i64 = conn.query_row(
             "SELECT COUNT(*) FROM logs WHERE created_at >= ?1",
             params![today_start],
             |r| r.get(0),
         )?;
-        Ok(LogStats { total, success, errors, today })
+        Ok(LogStats {
+            total,
+            success,
+            errors,
+            today,
+        })
     }
 
     pub fn clear_logs(&self) -> Result<(), rusqlite::Error> {
@@ -651,25 +741,45 @@ impl Database {
 
     pub fn get_dashboard_stats(&self) -> Result<DashboardStats, rusqlite::Error> {
         let conn = self.conn.lock().unwrap();
-        let total_requests: i64 = conn.query_row("SELECT COUNT(*) FROM logs", [], |r| r.get(0)).unwrap_or(0);
+        let total_requests: i64 = conn
+            .query_row("SELECT COUNT(*) FROM logs", [], |r| r.get(0))
+            .unwrap_or(0);
         let today_start = chrono::Utc::now().format("%Y-%m-%d").to_string();
-        let today_requests: i64 = conn.query_row(
-            "SELECT COUNT(*) FROM logs WHERE created_at >= ?1",
-            params![today_start],
-            |r| r.get(0),
-        ).unwrap_or(0);
-        let total_prompt_tokens: i64 = conn.query_row("SELECT COALESCE(SUM(prompt_tokens), 0) FROM logs", [], |r| r.get(0)).unwrap_or(0);
-        let total_completion_tokens: i64 = conn.query_row("SELECT COALESCE(SUM(completion_tokens), 0) FROM logs", [], |r| r.get(0)).unwrap_or(0);
-        let today_prompt_tokens: i64 = conn.query_row(
-            "SELECT COALESCE(SUM(prompt_tokens), 0) FROM logs WHERE created_at >= ?1",
-            params![today_start],
-            |r| r.get(0),
-        ).unwrap_or(0);
-        let today_completion_tokens: i64 = conn.query_row(
-            "SELECT COALESCE(SUM(completion_tokens), 0) FROM logs WHERE created_at >= ?1",
-            params![today_start],
-            |r| r.get(0),
-        ).unwrap_or(0);
+        let today_requests: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM logs WHERE created_at >= ?1",
+                params![today_start],
+                |r| r.get(0),
+            )
+            .unwrap_or(0);
+        let total_prompt_tokens: i64 = conn
+            .query_row(
+                "SELECT COALESCE(SUM(prompt_tokens), 0) FROM logs",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap_or(0);
+        let total_completion_tokens: i64 = conn
+            .query_row(
+                "SELECT COALESCE(SUM(completion_tokens), 0) FROM logs",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap_or(0);
+        let today_prompt_tokens: i64 = conn
+            .query_row(
+                "SELECT COALESCE(SUM(prompt_tokens), 0) FROM logs WHERE created_at >= ?1",
+                params![today_start],
+                |r| r.get(0),
+            )
+            .unwrap_or(0);
+        let today_completion_tokens: i64 = conn
+            .query_row(
+                "SELECT COALESCE(SUM(completion_tokens), 0) FROM logs WHERE created_at >= ?1",
+                params![today_start],
+                |r| r.get(0),
+            )
+            .unwrap_or(0);
         Ok(DashboardStats {
             total_requests,
             today_requests,
@@ -695,7 +805,10 @@ impl Database {
         rows.collect()
     }
 
-    pub fn get_chart_data(&self, granularity: &str) -> Result<Vec<ChartDataPoint>, rusqlite::Error> {
+    pub fn get_chart_data(
+        &self,
+        granularity: &str,
+    ) -> Result<Vec<ChartDataPoint>, rusqlite::Error> {
         let conn = self.conn.lock().unwrap();
         let date_format = match granularity {
             "hour" => "%Y-%m-%d %H:00",
@@ -760,11 +873,15 @@ impl Database {
             }
         }
         // 按总请求数排序
-        result.sort_by(|a, b| b.total_requests.cmp(&a.total_requests));
+        result.sort_by_key(|b| std::cmp::Reverse(b.total_requests));
         Ok(result)
     }
 
-    pub fn reset_model_breaker(&self, channel_id: &str, model: &str) -> Result<(), rusqlite::Error> {
+    pub fn reset_model_breaker(
+        &self,
+        channel_id: &str,
+        model: &str,
+    ) -> Result<(), rusqlite::Error> {
         let conn = self.conn.lock().unwrap();
         conn.execute(
             "UPDATE model_circuit_breaker SET failures = 0, open = 0, cooldown_until = NULL, updated_at = ?1 WHERE channel_id = ?2 AND model = ?3",

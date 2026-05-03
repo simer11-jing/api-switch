@@ -1,4 +1,4 @@
-use sha2::{Sha256, Digest};
+use sha2::{Digest, Sha256};
 
 pub fn hash_password(password: &str) -> String {
     let mut hasher = Sha256::new();
@@ -9,7 +9,12 @@ pub fn hash_password(password: &str) -> String {
 
 pub fn generate_token() -> String {
     let mut hasher = Sha256::new();
-    hasher.update(&rand::random::<[u8; 32]>());
-    hasher.update(&chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0).to_be_bytes());
+    hasher.update(rand::random::<[u8; 32]>());
+    hasher.update(
+        chrono::Utc::now()
+            .timestamp_nanos_opt()
+            .unwrap_or(0)
+            .to_be_bytes(),
+    );
     hex::encode(hasher.finalize())
 }

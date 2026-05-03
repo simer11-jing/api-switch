@@ -1,5 +1,5 @@
 use crate::db::Database;
-use crate::models::{ModelBreakerStatus, ResetModelBreakerRequest};
+use crate::models::ModelBreakerStatus;
 use rusqlite::params;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -53,11 +53,13 @@ impl CircuitBreakerManager {
 
     pub async fn record_channel_failure(&self, channel_id: &str) {
         let mut states = self.channel_states.write().await;
-        let state = states.entry(channel_id.to_string()).or_insert(ChannelBreakerState {
-            failures: 0,
-            last_failure: None,
-            open: false,
-        });
+        let state = states
+            .entry(channel_id.to_string())
+            .or_insert(ChannelBreakerState {
+                failures: 0,
+                last_failure: None,
+                open: false,
+            });
         state.failures += 1;
         state.last_failure = Some(Instant::now());
         if state.failures >= self.threshold {
@@ -77,22 +79,19 @@ impl CircuitBreakerManager {
             params![channel_id, model],
             |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
         );
-        match result {
-            Ok((failures, open, cooldown_until)) => {
-                if open == 1 {
-                    if let Some(cooldown) = cooldown_until {
-                        if now < cooldown {
-                            return false;
-                        }
-                    } else {
+        if let Ok((failures, open, cooldown_until)) = result {
+            if open == 1 {
+                if let Some(cooldown) = cooldown_until {
+                    if now < cooldown {
                         return false;
                     }
-                }
-                if failures >= 3 {
+                } else {
                     return false;
                 }
             }
-            Err(_) => {}
+            if failures >= 3 {
+                return false;
+            }
         }
         true
     }
@@ -159,7 +158,7 @@ impl CircuitBreakerManager {
     pub async fn get_model_breaker_statuses(&self, db: &Database) -> Vec<ModelBreakerStatus> {
         let conn = db.conn.lock().unwrap();
         let mut stmt = match conn.prepare(
-            "SELECT channel_id, model, failures, open, cooldown_until FROM model_circuit_breaker"
+            "SELECT channel_id, model, failures, open, cooldown_until FROM model_circuit_breaker",
         ) {
             Ok(s) => s,
             Err(_) => return vec![],
